@@ -1,0 +1,49 @@
+# NayoGuildBridge
+
+Клиентский Fabric-мод для нормального отображения bridged сообщений в гильд-чате.
+
+## Что делает мод
+
+- Чисто форматирует сообщения от bridge-ботов в `Guild`.
+- Определяет источник по маркерам (`[TG]`, `.`, и т.д.) и подставляет нужный префикс.
+- Красит имя отправителя отдельно от текста.
+- Есть стиль ника через `§` коды или обычный цвет.
+- Подсвечивает твой ник и слова по правилам (`слово=§коды`).
+- Фильтрует мусор через блоклист.
+- Может отправлять/получать сообщения через backend (`/api/ingest` и `/api/poll`).
+
+## Актуальные версии
+
+- Minecraft: `1.21.10`
+- Java: `21`
+- Fabric Loader: `0.18.4+`
+
+## Зависимости
+
+Обязательные:
+
+- [Fabric Loader](https://fabricmc.net/use/installer/)
+- [Fabric API](https://modrinth.com/mod/fabric-api)
+- [Fabric Language Kotlin](https://modrinth.com/mod/fabric-language-kotlin)
+- [YACL 3](https://modrinth.com/mod/yacl)
+
+Опциональные:
+
+- [Mod Menu](https://modrinth.com/mod/modmenu) — удобно открывать конфиг из списка модов.
+
+## Установка
+
+1. Установи Fabric Loader.
+2. Закинь `NayoGuildBridge` и зависимости в папку `mods`.
+3. Запусти игру.
+4. Открой меню мода (по клавише `Right Shift` или командой `/bridge`).
+
+## Конфиг
+
+Конфиг создается автоматически в:
+
+- `config/chatbridge.json`
+
+## Лицензия
+
+MIT
