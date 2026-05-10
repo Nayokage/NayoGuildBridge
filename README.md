@@ -10,7 +10,7 @@ A client-side Fabric mod for cleaner bridged chat in Guild.
 - Sender nick styling via plain color or Minecraft `§` codes.
 - Nick and keyword highlighting (`word=§codes` rules).
 - Blocklist filtering for unwanted content.
-- Optional backend sync (`/api/ingest` + `/api/poll`).
+- Optional backend sync (`/api/ingest` + `/api/poll`). (Api dont work)
 
 ## Supported Versions
 
