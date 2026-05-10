@@ -1,30 +1,49 @@
-<h1 align="center">
-  NayoGuildBridge: Mod for Hypixel
-</h1>
+# NayoGuildBridge
 
-<div align="center">
-  
-[![Releases](https://img.shields.io/github/v/release/Nayokage/BridgeFilter?logo=github&style=for-the-badge)](https://github.com/Nayokage/BridgeFilter/releases)
-[![Made with Kotlin](https://img.shields.io/badge/Made%20With-Kotlin-orange?style=for-the-badge&logo=kotlin&logocolor=white)](https://kotlinlang.org/)
-[![License](https://img.shields.io/github/license/Nayokage/BridgeFilter?style=for-the-badge)](https://github.com/Nayokage/BridgeFilter/blob/main/LICENSE)
+Клиентский Fabric-мод для нормального отображения bridged сообщений в гильд-чате.
 
-</div>
+## Что делает мод
 
-## What it does
+- Чисто форматирует сообщения от bridge-ботов в `Guild`.
+- Определяет источник по маркерам (`[TG]`, `.`, и т.д.) и подставляет нужный префикс.
+- Красит имя отправителя отдельно от текста.
+- Есть стиль ника через `§` коды или обычный цвет.
+- Подсвечивает твой ник и слова по правилам (`слово=§коды`).
+- Фильтрует мусор через блоклист.
+- Может отправлять/получать сообщения через backend (`/api/ingest` и `/api/poll`).
 
-NayoGuildBridge is a Fabric Minecraft mod that provides customizable formatting for bridge bot messages.\
-\* Bridge Bot is a “player” that forwards messages from other Hypixel guilds or chat platforms (such as Discord) to the guild chat.
+## Актуальные версии
 
-- Allows to customize colors and prefix of the formatted message.
+- Minecraft: `1.21.10`
+- Java: `21`
+- Fabric Loader: `0.18.4+`
 
-## Information
+## Зависимости
 
+Обязательные:
 
-
-## Dependencies
-
-- [Fabric](https://fabricmc.net/)
-- [Fabric Language Kotlin](https://modrinth.com/mod/fabric-language-kotlin)
+- [Fabric Loader](https://fabricmc.net/use/installer/)
 - [Fabric API](https://modrinth.com/mod/fabric-api)
-- [Mod Menu](https://modrinth.com/mod/modmenu) + [Placeholder API](https://modrinth.com/mod/placeholder-api)
-- [Cloth Config](https://modrinth.com/mod/cloth-config)
+- [Fabric Language Kotlin](https://modrinth.com/mod/fabric-language-kotlin)
+- [YACL 3](https://modrinth.com/mod/yacl)
+
+Опциональные:
+
+- [Mod Menu](https://modrinth.com/mod/modmenu) — удобно открывать конфиг из списка модов.
+
+## Установка
+
+1. Установи Fabric Loader.
+2. Закинь `NayoGuildBridge` и зависимости в папку `mods`.
+3. Запусти игру.
+4. Открой меню мода (по клавише `Right Shift` или командой `/bridge`).
+
+## Конфиг
+
+Конфиг создается автоматически в:
+
+- `config/chatbridge.json`
+
+## Лицензия
+
+MIT
