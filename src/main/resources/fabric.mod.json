@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "chatbridge",
+	"version": "${version}",
+	"name": "NayoGuildBridge",
+	"description": "Provides configurable formatting for bridge bot messages.",
+	"authors": ["fiokem aka nayokage"],
+	"contact": {"sources": "https://github.com/nayokage/bridgefilter"},
+	"license": "MIT",
+	"icon": "assets/chatbridge/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"main": [
+			{
+				"value": "com.nayoguildbridge.ChatBridge",
+				"adapter": "kotlin"
+			}
+
+		],
+		"client": [
+			{
+				"value": "com.nayoguildbridge.ChatBridgeClient",
+				"adapter": "kotlin"
+			}
+		],
+		"modmenu": [
+			"com.nayoguildbridge.config.ChatBridgeModMenu"
+		]
+	},
+	"mixins": [],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": ">=1.21.9 <=1.21.11",
+		"java": ">=21",
+		"fabric-api": "*",
+		"fabric-language-kotlin": "*"
+	}
+}
