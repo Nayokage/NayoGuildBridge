@@ -8,11 +8,11 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
 class NickStyleScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Nick")) {
-    private var senderNickColorEnabled = ChatBridgeConfig.config.senderNickColorEnabled
-    private var senderNickLegacyEnabled = ChatBridgeConfig.config.senderNickLegacyEnabled
-    private var senderNickStyleOnlyMine = ChatBridgeConfig.config.senderNickStyleOnlyMine
-    private var senderNickLegacyCodes = ChatBridgeConfig.config.senderNickLegacyCodes
-    private var myNickAliases = ChatBridgeConfig.config.myNickAliases.joinToString(", ")
+    private var senderNickColorEnabled = NgbConfig.config.senderNickColorEnabled
+    private var senderNickLegacyEnabled = NgbConfig.config.senderNickLegacyEnabled
+    private var senderNickStyleOnlyMine = NgbConfig.config.senderNickStyleOnlyMine
+    private var senderNickLegacyCodes = NgbConfig.config.senderNickLegacyCodes
+    private var myNickAliases = NgbConfig.config.myNickAliases.joinToString(", ")
 
     private lateinit var legacyCodesBox: EditBox
     private lateinit var myAliasesBox: EditBox
@@ -77,7 +77,7 @@ class NickStyleScreen(private val parent: Screen?) : Screen(Component.literal("N
     }
 
     private fun applyAndSave() {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         cfg.senderNickColorEnabled = senderNickColorEnabled
         cfg.senderNickLegacyEnabled = senderNickLegacyEnabled
         cfg.senderNickLegacyCodes = legacyCodesBox.value.ifEmpty { "§4" }
@@ -87,7 +87,7 @@ class NickStyleScreen(private val parent: Screen?) : Screen(Component.literal("N
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
-        ChatBridgeConfig.save()
+        NgbConfig.save()
     }
 
     override fun onClose() {

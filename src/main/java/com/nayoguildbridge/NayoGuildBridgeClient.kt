@@ -1,7 +1,7 @@
 package com.nayoguildbridge
 
-import com.nayoguildbridge.config.ChatBridgeConfigManager
-import com.nayoguildbridge.config.ChatBridgeConfig
+import com.nayoguildbridge.config.NgbConfigManager
+import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.remote.RemoteBridgeApi
 import net.fabricmc.api.ClientModInitializer
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
@@ -16,15 +16,15 @@ import net.minecraft.network.chat.Component
 import org.lwjgl.glfw.GLFW
 
 // Ет отвечает за клиент часть: хоткей и открытие меню
-object ChatBridgeClient : ClientModInitializer {
+object NayoGuildBridgeClient : ClientModInitializer {
     private lateinit var menuKey: KeyMapping
     private var pendingOpenFromCommand: Boolean = false
 
     override fun onInitializeClient() {
-        ChatBridge.logger.info("[NayoGuildBridge] Initializing client entrypoint.")
+        NayoGuildBridge.logger.info("[NayoGuildBridge] Initializing client entrypoint.")
         menuKey = KeyBindingHelper.registerKeyBinding(
             KeyMapping(
-                "key.chatbridge.open_menu",
+                "key.ngb.open_menu",
                 GLFW.GLFW_KEY_RIGHT_SHIFT,
                 KeyMapping.Category.MISC
             )
@@ -35,7 +35,7 @@ object ChatBridgeClient : ClientModInitializer {
                 ClientCommandManager.literal("bridge").executes { openConfigFromCommand(it.source) }
             )
             dispatcher.register(
-                ClientCommandManager.literal("chatbridge").executes { openConfigFromCommand(it.source) }
+                ClientCommandManager.literal("ngb").executes { openConfigFromCommand(it.source) }
             )
             dispatcher.register(
                 ClientCommandManager.literal("bridgemenu").executes { openConfigFromCommand(it.source) }
@@ -67,7 +67,7 @@ object ChatBridgeClient : ClientModInitializer {
 
     private fun openConfig(client: Minecraft) {
         try {
-            if (!ChatBridge.hasYacl()) {
+            if (!NayoGuildBridge.hasYacl()) {
                 client.player?.displayClientMessage(
                     Component.literal("§c[NayoGuildBridge] §fУ Вас не установлен YACL. Установите его иначе меню не откроетца."),
                     false
@@ -94,9 +94,9 @@ object ChatBridgeClient : ClientModInitializer {
 
     private fun buildYaclScreen(parent: net.minecraft.client.gui.screens.Screen?): net.minecraft.client.gui.screens.Screen? {
         return try {
-            ChatBridgeConfigManager.build(parent)
+            NgbConfigManager.build(parent)
         } catch (t: Throwable) {
-            ChatBridge.logger.error("[NayoGuildBridge] Failed to create YACL screen.", t)
+            NayoGuildBridge.logger.error("[NayoGuildBridge] Failed to create YACL screen.", t)
             null
         }
     }

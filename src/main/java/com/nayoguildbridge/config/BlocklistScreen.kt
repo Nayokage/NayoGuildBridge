@@ -81,8 +81,8 @@ class BlocklistScreen(
         addRenderableWidget(
             Button.builder(Component.literal("Done")) {
                 // Ет отвечает за мгновенное сохранение в конфиг
-                ChatBridgeConfig.config.blockList = items.toList()
-                ChatBridgeConfig.save()
+                NgbConfig.config.blockList = items.toList()
+                NgbConfig.save()
                 Minecraft.getInstance().setScreen(parent)
             }.bounds(centerX - 40, bottomY, 80, h).build()
         )

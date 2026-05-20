@@ -8,9 +8,9 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
 class WordsScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Words")) {
-    private var wordHighlightEnabled = ChatBridgeConfig.config.wordHighlightEnabled
-    private var wordHighlightOnlyMine = ChatBridgeConfig.config.wordHighlightOnlyMine
-    private var wordHighlightRules = ChatBridgeConfig.config.wordHighlightRules
+    private var wordHighlightEnabled = NgbConfig.config.wordHighlightEnabled
+    private var wordHighlightOnlyMine = NgbConfig.config.wordHighlightOnlyMine
+    private var wordHighlightRules = NgbConfig.config.wordHighlightRules
 
     private lateinit var rulesBox: EditBox
 
@@ -61,11 +61,11 @@ class WordsScreen(private val parent: Screen?) : Screen(Component.literal("NayoG
     }
 
     private fun applyAndSave() {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         cfg.wordHighlightEnabled = wordHighlightEnabled
         cfg.wordHighlightOnlyMine = wordHighlightOnlyMine
         cfg.wordHighlightRules = rulesBox.value
-        ChatBridgeConfig.save()
+        NgbConfig.save()
     }
 
     override fun onClose() {

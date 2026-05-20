@@ -1,7 +1,7 @@
 package com.nayoguildbridge
 
-import com.nayoguildbridge.config.ChatBridgeConfig
-import com.nayoguildbridge.config.ChatBridgeConfig.config
+import com.nayoguildbridge.config.NgbConfig
+import com.nayoguildbridge.config.NgbConfig.config
 import com.nayoguildbridge.remote.RemoteBridgeApi
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
@@ -16,15 +16,15 @@ import org.slf4j.LoggerFactory
 import java.util.regex.Pattern.compile
 
 
-object ChatBridge : ModInitializer {
-    val logger: Logger = LoggerFactory.getLogger("chatbridge")
+object NayoGuildBridge : ModInitializer {
+    val logger: Logger = LoggerFactory.getLogger("nayoguildbridge")
     const val GUILD_PATTERN = ("^(?:G|Guild) > (?:\\[(?:\\S+?)\\] )?(\\w+)(?: \\[(?:\\S+?)\\])?: ?(.+)$")
     const val BRIDGE_PATTERN =
         ("^ *((?:.+?)(?: attached an? \\w+(?::|$)| replied to .+ with an? \\w+(?::|$)| replied to .+?(?::|$)|:))(?:(?: (.*)?$)|$)")
     private val STRIP_FORMATTING = compile("§\\w")
 
     override fun onInitialize() {
-        ChatBridgeConfig.load()
+        NgbConfig.load()
         ClientReceiveMessageEvents.MODIFY_GAME.register(::onModify)
     }
 

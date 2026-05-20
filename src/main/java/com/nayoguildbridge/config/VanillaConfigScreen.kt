@@ -10,21 +10,21 @@ import net.minecraft.network.chat.Component
 // Ет отвечает за ванильное меню, если YACL/Cloth нет
 class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Bridge Filter")) {
 
-    private var bridgeEnabled = ChatBridgeConfig.config.bridgeEnabled
-    private var blockList = ChatBridgeConfig.config.blockList.joinToString(" ")
-    private var nickHighlightEnabled = ChatBridgeConfig.config.nickHighlightEnabled
-    private var guildBridgeFormatEnabled = ChatBridgeConfig.config.guildBridgeFormatEnabled
-    private var bridgeCommandFormatEnabled = ChatBridgeConfig.config.bridgeCommandFormatEnabled
-    private var senderNickColorEnabled = ChatBridgeConfig.config.senderNickColorEnabled
-    private var senderNickLegacyEnabled = ChatBridgeConfig.config.senderNickLegacyEnabled
-    private var senderNickLegacyCodes = ChatBridgeConfig.config.senderNickLegacyCodes
-    private var senderNickStyleOnlyMine = ChatBridgeConfig.config.senderNickStyleOnlyMine
-    private var myNickAliases = ChatBridgeConfig.config.myNickAliases.joinToString(", ")
-    private var telegramMarker = ChatBridgeConfig.config.telegramMarker
-    private var minecraftMarker = ChatBridgeConfig.config.minecraftMarker
-    private var wordHighlightEnabled = ChatBridgeConfig.config.wordHighlightEnabled
-    private var wordHighlightRules = ChatBridgeConfig.config.wordHighlightRules
-    private var wordHighlightOnlyMine = ChatBridgeConfig.config.wordHighlightOnlyMine
+    private var bridgeEnabled = NgbConfig.config.bridgeEnabled
+    private var blockList = NgbConfig.config.blockList.joinToString(" ")
+    private var nickHighlightEnabled = NgbConfig.config.nickHighlightEnabled
+    private var guildBridgeFormatEnabled = NgbConfig.config.guildBridgeFormatEnabled
+    private var bridgeCommandFormatEnabled = NgbConfig.config.bridgeCommandFormatEnabled
+    private var senderNickColorEnabled = NgbConfig.config.senderNickColorEnabled
+    private var senderNickLegacyEnabled = NgbConfig.config.senderNickLegacyEnabled
+    private var senderNickLegacyCodes = NgbConfig.config.senderNickLegacyCodes
+    private var senderNickStyleOnlyMine = NgbConfig.config.senderNickStyleOnlyMine
+    private var myNickAliases = NgbConfig.config.myNickAliases.joinToString(", ")
+    private var telegramMarker = NgbConfig.config.telegramMarker
+    private var minecraftMarker = NgbConfig.config.minecraftMarker
+    private var wordHighlightEnabled = NgbConfig.config.wordHighlightEnabled
+    private var wordHighlightRules = NgbConfig.config.wordHighlightRules
+    private var wordHighlightOnlyMine = NgbConfig.config.wordHighlightOnlyMine
 
     private lateinit var blockListBox: EditBox
     private lateinit var tgMarkerBox: EditBox
@@ -178,7 +178,7 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
     }
 
     private fun applyAndSave() {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         cfg.bridgeEnabled = bridgeEnabled
         // Ет отвечает за сохранение блоклиста через запятую/новую строку
         cfg.blockList = blockListBox.value
@@ -203,7 +203,7 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
         cfg.wordHighlightEnabled = wordHighlightEnabled
         cfg.wordHighlightRules = wordRulesBox.value
         cfg.wordHighlightOnlyMine = wordHighlightOnlyMine
-        ChatBridgeConfig.save()
+        NgbConfig.save()
     }
 
     private fun label(name: String, enabled: Boolean) = "$name: " + if (enabled) "ON" else "OFF"

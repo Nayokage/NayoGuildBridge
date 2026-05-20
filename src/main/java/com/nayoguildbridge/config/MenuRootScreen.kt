@@ -42,7 +42,7 @@ class MenuRootScreen(private val parent: Screen?) : Screen(Component.literal("Na
 
         addRenderableWidget(
             Button.builder(Component.literal("Blocklist")) {
-                Minecraft.getInstance().setScreen(BlocklistScreen(this, ChatBridgeConfig.config.blockList.joinToString(", ")))
+                Minecraft.getInstance().setScreen(BlocklistScreen(this, NgbConfig.config.blockList.joinToString(", ")))
             }.bounds(centerX - w / 2, y, w, h).build()
         )
         y += gap

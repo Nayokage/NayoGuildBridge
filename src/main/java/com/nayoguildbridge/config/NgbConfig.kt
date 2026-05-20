@@ -1,6 +1,6 @@
 package com.nayoguildbridge.config
 
-import com.nayoguildbridge.ChatBridge.logger
+import com.nayoguildbridge.NayoGuildBridge.logger
 import java.io.File
 import com.google.gson.GsonBuilder
 
@@ -59,11 +59,12 @@ data class Config(
     var wordHighlightOnlyMine: Boolean = false
 )
 
-object ChatBridgeConfig {
+object NgbConfig {
     private val gson = GsonBuilder()
         .setPrettyPrinting()
         .create()
-    private val file = File("config/chatbridge.json")
+    private val file = File("config/nayoguildbridge.json")
+    private val legacyFile = File("config/chatbridge.json")
 
     var config = Config()
 
@@ -83,13 +84,21 @@ object ChatBridgeConfig {
     }
 
     fun load() {
-        if (!file.exists()) {
-            logger.info("Config file not found, new created.")
-            save()
-            return
+        val source = when {
+            file.exists() -> file
+            legacyFile.exists() -> legacyFile
+            else -> {
+                logger.info("Config file not found, new created.")
+                save()
+                return
+            }
         }
 
-        val json = file.readText()
+        val json = source.readText()
         config = gson.fromJson(json, Config::class.java) ?: Config()
+        if (source == legacyFile) {
+            logger.info("Migrated config from chatbridge.json to nayoguildbridge.json")
+            save()
+        }
     }
 }

@@ -42,7 +42,7 @@ Optional:
 
 Config is generated automatically at:
 
-- `config/chatbridge.json`
+- `config/nayoguildbridge.json`
 
 ## License
 

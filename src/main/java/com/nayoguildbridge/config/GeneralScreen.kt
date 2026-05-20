@@ -8,11 +8,11 @@ import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
 class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / General")) {
-    private var bridgeEnabled = ChatBridgeConfig.config.bridgeEnabled
-    private var guildBridgeFormatEnabled = ChatBridgeConfig.config.guildBridgeFormatEnabled
-    private var bridgeCommandFormatEnabled = ChatBridgeConfig.config.bridgeCommandFormatEnabled
-    private var telegramMarker = ChatBridgeConfig.config.telegramMarker
-    private var minecraftMarker = ChatBridgeConfig.config.minecraftMarker
+    private var bridgeEnabled = NgbConfig.config.bridgeEnabled
+    private var guildBridgeFormatEnabled = NgbConfig.config.guildBridgeFormatEnabled
+    private var bridgeCommandFormatEnabled = NgbConfig.config.bridgeCommandFormatEnabled
+    private var telegramMarker = NgbConfig.config.telegramMarker
+    private var minecraftMarker = NgbConfig.config.minecraftMarker
 
     private lateinit var tgMarkerBox: EditBox
     private lateinit var mcMarkerBox: EditBox
@@ -69,13 +69,13 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
     }
 
     private fun applyAndSave() {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         cfg.bridgeEnabled = bridgeEnabled
         cfg.guildBridgeFormatEnabled = guildBridgeFormatEnabled
         cfg.bridgeCommandFormatEnabled = bridgeCommandFormatEnabled
         cfg.telegramMarker = tgMarkerBox.value.trim().ifEmpty { "[TG]" }
         cfg.minecraftMarker = mcMarkerBox.value.ifEmpty { "." }
-        ChatBridgeConfig.save()
+        NgbConfig.save()
     }
 
     override fun onClose() {

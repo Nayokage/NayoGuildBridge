@@ -1,7 +1,7 @@
 package com.nayoguildbridge.remote
 
-import com.nayoguildbridge.ChatBridge
-import com.nayoguildbridge.config.ChatBridgeConfig
+import com.nayoguildbridge.NayoGuildBridge
+import com.nayoguildbridge.config.NgbConfig
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import net.minecraft.client.Minecraft
@@ -23,14 +23,14 @@ object RemoteBridgeApi {
         .connectTimeout(Duration.ofSeconds(5))
         .build()
     private val executor: Executor = Executors.newFixedThreadPool(2) { r ->
-        Thread(r, "chatbridge-remote").apply { isDaemon = true }
+        Thread(r, "ngb-remote").apply { isDaemon = true }
     }
 
     @Volatile
     private var lastPollAtMs: Long = 0L
 
     private fun baseUrls(): List<String> {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         val primary = cfg.remoteBridgeUrl.trim().trimEnd('/')
         val backup = cfg.remoteBridgeUrlBackup.trim().trimEnd('/')
         return listOf(primary, backup).filter { it.isNotBlank() }.distinct()
@@ -43,7 +43,7 @@ object RemoteBridgeApi {
 
     // Ет отвечает за общий тумблер: bridgeEnabled + remoteBridgeEnabled
     private fun isRemoteBridgeActive(): Boolean {
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         return cfg.bridgeEnabled && cfg.remoteBridgeEnabled
     }
 
@@ -59,7 +59,7 @@ object RemoteBridgeApi {
         server: String? = null
     ) {
         if (!isRemoteBridgeActive()) return
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         val baseUrls = baseUrls()
         val playerKey = playerKey()
         if (baseUrls.isEmpty()) return
@@ -100,14 +100,14 @@ object RemoteBridgeApi {
                 }
             }
             if (!sent) {
-                ChatBridge.logger.debug("[NayoGuildBridge] Remote ingest failed on all domains")
+                NayoGuildBridge.logger.debug("[NayoGuildBridge] Remote ingest failed on all domains")
             }
         }, executor)
     }
 
     fun tickPoll(client: Minecraft) {
         if (!isRemoteBridgeActive()) return
-        val cfg = ChatBridgeConfig.config
+        val cfg = NgbConfig.config
         val baseUrls = baseUrls()
         val playerKey = playerKey()
         if (baseUrls.isEmpty()) return
@@ -164,7 +164,7 @@ object RemoteBridgeApi {
                     }
                 }
             } catch (t: Throwable) {
-                ChatBridge.logger.debug("[NayoGuildBridge] Remote poll parse failed: ${t.message}")
+                NayoGuildBridge.logger.debug("[NayoGuildBridge] Remote poll parse failed: ${t.message}")
             }
         }
     }
