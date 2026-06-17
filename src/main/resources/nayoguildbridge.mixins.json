@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "com.nayoguildbridge.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ChatComponentMixin",
+    "ChatCopyCaptureMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

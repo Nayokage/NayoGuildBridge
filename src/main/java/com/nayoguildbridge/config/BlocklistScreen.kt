@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
-// Ет отвечает за отдельное меню блоклиста
 class BlocklistScreen(
     private val parent: Screen,
     initial: String
@@ -57,7 +56,6 @@ class BlocklistScreen(
             addRenderableWidget(
                 Button.builder(Component.literal("Remove: $s")) {
                     items.remove(s)
-                    // Ет отвечает за откат страницы если список стал пустой
                     if (page > 0 && page * perPage >= items.size) page--
                     Minecraft.getInstance().setScreen(BlocklistScreen(parent, items.joinToString(" ")))
                 }.bounds(centerX - w / 2, rowY, w, h).build()
@@ -80,7 +78,6 @@ class BlocklistScreen(
         )
         addRenderableWidget(
             Button.builder(Component.literal("Done")) {
-                // Ет отвечает за мгновенное сохранение в конфиг
                 NgbConfig.config.blockList = items.toList()
                 NgbConfig.save()
                 Minecraft.getInstance().setScreen(parent)

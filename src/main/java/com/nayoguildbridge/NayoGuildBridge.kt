@@ -1,8 +1,14 @@
 package com.nayoguildbridge
 
+import com.nayoguildbridge.bridge.BridgeChatDedupe
 import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.config.NgbConfig.config
-import com.nayoguildbridge.remote.RemoteBridgeApi
+import com.nayoguildbridge.quote.QuoteDetector
+import com.nayoguildbridge.quote.QuoteDisplay
+import com.nayoguildbridge.util.BridgeTextUtil
+import com.nayoguildbridge.util.GuildChatClassifier
+import com.nayoguildbridge.qol.ChatQoL
+import com.nayoguildbridge.guard.EnvironmentGuard
 import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.minecraft.client.Minecraft
@@ -18,77 +24,164 @@ import java.util.regex.Pattern.compile
 
 object NayoGuildBridge : ModInitializer {
     val logger: Logger = LoggerFactory.getLogger("nayoguildbridge")
-    const val GUILD_PATTERN = ("^(?:G|Guild) > (?:\\[(?:\\S+?)\\] )?(\\w+)(?: \\[(?:\\S+?)\\])?: ?(.+)$")
+    const val GUILD_PATTERN =
+        ("^(?:G|Guild|Officer) > (?:\\[(?:\\S+?)\\] )?(\\w+)(?: \\[(?:\\S+?)\\])?: ?(.+)$")
     const val BRIDGE_PATTERN =
         ("^ *((?:.+?)(?: attached an? \\w+(?::|$)| replied to .+ with an? \\w+(?::|$)| replied to .+?(?::|$)|:))(?:(?: (.*)?$)|$)")
     private val STRIP_FORMATTING = compile("§\\w")
+    private val BRACKET_SOURCE = compile("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""")
+
+    sealed class ChatTransform {
+        data object Keep : ChatTransform()
+        data object Hide : ChatTransform()
+        data class Replace(val component: Component) : ChatTransform()
+    }
 
     override fun onInitialize() {
         NgbConfig.load()
-        ClientReceiveMessageEvents.MODIFY_GAME.register(::onModify)
+        ClientReceiveMessageEvents.MODIFY_GAME.register { message, actionBar ->
+            when (val t = transformIncomingMessage(message, actionBar)) {
+                is ChatTransform.Keep -> {
+                    if (!actionBar) rememberOwnGuildLineIfVisible(message.string)
+                    message
+                }
+                is ChatTransform.Hide -> Component.empty()
+                is ChatTransform.Replace -> t.component
+            }
+        }
     }
 
-
-    private fun onModify(message: Component, actionBar: Boolean): Component {
-        if (actionBar) return message
-        if (!config.bridgeEnabled) return message
+    fun transformIncomingMessage(
+        message: Component,
+        actionBar: Boolean,
+        chatSender: String? = null
+    ): ChatTransform {
+        if (actionBar) return ChatTransform.Keep
+        if (!config.bridgeEnabled) return ChatTransform.Keep
+        if (!EnvironmentGuard.isOperational()) return ChatTransform.Keep
 
         val unformatted = STRIP_FORMATTING.matcher(message.string).replaceAll("")
 
-        val channel = when(unformatted.split(" ")[0]) {
+        val firstWord = unformatted.split(" ").firstOrNull() ?: ""
+        val isOfficerChannel = firstWord.equals("Officer", ignoreCase = true)
+        var channel = when (firstWord) {
             "From" -> ChatChannel.PRIVATE
             "Party" -> ChatChannel.PARTY
-            "Guild" -> ChatChannel.GUILD
-            "G" -> ChatChannel.GUILD
+            "Guild", "G", "Officer" -> ChatChannel.GUILD
             else -> ChatChannel.UNKNOWN
         }
 
-        // Ет отвечает за формат ответов команд бриджа
+        if (!chatSender.isNullOrBlank()) {
+            val senderIsBot = isBridgeBotNick(chatSender)
+            val body = unformatted.trim()
+            val relayBody = GuildChatClassifier.looksLikeIncomingRelayBody(body, senderIsBot)
+            if (channel == ChatChannel.UNKNOWN && (senderIsBot || relayBody)) {
+                channel = ChatChannel.GUILD
+            }
+            if (isMyNick(chatSender) || (!senderIsBot && !relayBody)) {
+                return ChatTransform.Keep
+            }
+        }
+
         if (config.bridgeCommandFormatEnabled) {
             val maybeCmd = formatBridgeCommandMessage(message, unformatted)
             if (maybeCmd !== message) {
-                return maybeCmd
+                return ChatTransform.Replace(maybeCmd)
             }
         }
 
         if (channel == ChatChannel.GUILD && config.guildBridgeFormatEnabled) {
-            val match = compile(GUILD_PATTERN).matcher(unformatted)
-            if (!match.matches()) return message
-
-            val username = match.group(1)
-            var text = match.group(2)
-            val fromKnownBridgeBot = isBridgeBotNick(username)
-
-            // Ет отвечает за проверку что сообщение реально от бриджа
-            if (!looksLikeBridgedPayload(text, fromKnownBridgeBot) && !fromKnownBridgeBot) {
-                return message
+            val guildMatch = compile(GUILD_PATTERN).matcher(unformatted)
+            val relayBodyOnly = !chatSender.isNullOrBlank() &&
+                GuildChatClassifier.looksLikeIncomingRelayBody(
+                    unformatted.trim(),
+                    isBridgeBotNick(chatSender!!)
+                )
+            val (username, rawBody) = if (guildMatch.matches()) {
+                guildMatch.group(1) to guildMatch.group(2)
+            } else if (!chatSender.isNullOrBlank() && (isBridgeBotNick(chatSender) || relayBodyOnly)) {
+                chatSender to unformatted.trim()
+            } else {
+                return ChatTransform.Keep
             }
 
-            // Ет отвечает за блоклист
-            if (shouldBlock(text)) {
-                return Component.empty()
+            var text = rawBody
+            val speakerIsBot = isBridgeBotNick(username) ||
+                GuildChatClassifier.hasBridgeRankOnLine(unformatted, username)
+
+            if (!GuildChatClassifier.shouldApplyBridgeFormat(unformatted, username, rawBody)) {
+                return ChatTransform.Keep
             }
 
-            // Ет отвечает за замену маркера на источник (Дискорд/ТГ/Майн)
-            val (sourceComponent, cleanedText) = buildSourcePrefixAndStrip(text)
+            val fromKnownBridgeBot = speakerIsBot
+
+            if (text.trimStart().startsWith("[QUOTE]", ignoreCase = true)) {
+                val quoteFormatted = formatRelayedQuoteMessage(text, username)
+                if (quoteFormatted != null) return ChatTransform.Replace(quoteFormatted)
+            }
+
+            if (shouldBlock(username, text)) {
+                return ChatTransform.Hide
+            }
+
+            val rawBodyForSource = rawBody
+            val bracketParsed = parseBracketSourceLine(text)
+            val sourceIdFromBody = when {
+                bracketParsed != null -> bracketParsed.sourceId
+                else -> detectSourceId(rawBodyForSource)
+            }
+
+            val (sourceComponent, cleanedText) = if (bracketParsed != null) {
+                buildSourceLabelForId(bracketParsed.sourceId) to bracketParsed.body
+            } else {
+                buildSourcePrefixAndStrip(text)
+            }
             text = cleanedText
+            if (isIgnoredByOrigin(sourceIdFromBody)) return ChatTransform.Hide
 
             val bridgeMatcher = compile(BRIDGE_PATTERN).matcher(text)
 
-            val (name, msg) =
-                if (bridgeMatcher.find()) {
+            val (name, msg) = if (bracketParsed != null) {
+                bracketParsed.nick to bracketParsed.body
+            } else if (bridgeMatcher.find()) {
                     bridgeMatcher.group(1) to (bridgeMatcher.group(2) ?: "")
                 } else {
-                    parseBridgeSenderAndMessage(text) ?: if (config.hideBotName) text to "" else username to text
+                parseBridgeSenderAndMessage(text) ?: when {
+                    fromKnownBridgeBot && config.hideBotName -> "" to text
+                    else -> username to text
+                }
                 }
 
             val strippedMsg = msg.replaceFirst(Regex("^: "), "")
-            val senderNick = extractSenderNick(name)
-            val isMine = isMyNick(senderNick)
+            val senderNick = if (bracketParsed != null) {
+                bracketParsed.nick
+            } else {
+                extractSenderNick(name)
+            }
+            if (isIgnoredByPlayer(senderNick)) return ChatTransform.Hide
 
-            // Ет отвечает за префикс источника
-            val prefixComponent = sourceComponent
-            val senderComponentBase = buildSenderNameComponent(if (msg.isEmpty()) text else name, config.nameColor.toColor(), isMine)
+            if (fromKnownBridgeBot && strippedMsg.isNotBlank()) {
+                val dedupeKey = BridgeChatDedupe.keyFor(senderNick, strippedMsg)
+                if (BridgeChatDedupe.seenRecently(dedupeKey)) return ChatTransform.Hide
+                BridgeChatDedupe.remember(dedupeKey)
+            }
+            val quoteTargetNick = extractQuotePrefillTarget(name, senderNick)
+            val isMine = isMyNick(senderNick)
+            val isReplyLike = looksLikeReplyName(if (msg.isEmpty()) text else name)
+
+            val prefixComponent = when {
+                isOfficerChannel -> Component.literal("[Officer] ")
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(config.officerPrefixColor.toColor())))
+                sourceComponent.string.isNotBlank() -> sourceComponent
+                else -> buildSourceLabelForId(sourceIdFromBody)
+            }
+            val displayNameRaw = when {
+                isReplyLike -> senderNick
+                senderNick.isNotBlank() -> senderNick
+                name.isNotBlank() -> name
+                else -> ""
+            }
+            val senderComponentBase = buildSenderNameComponent(displayNameRaw, config.nameColor.toColor(), isMine)
             val senderComponent = if (config.nickHighlightEnabled && isMine) {
                 Component.literal(senderComponentBase.string)
                     .withStyle(
@@ -100,59 +193,150 @@ object NayoGuildBridge : ModInitializer {
                 senderComponentBase
             }
 
+            val finalBody = ChatQoL.collapseText(ChatQoL.applyIncomingBody(strippedMsg))
             val formatted = Component.empty()
                 .append(prefixComponent)
+                .append(if (isReplyLike) buildReplyMarkerComponent() else Component.empty())
+            if (displayNameRaw.isNotBlank()) {
+                formatted
                 .append(senderComponent)
                 .append(
-                    Component.literal(if (msg.isEmpty()) "" else ": ")
+                        Component.literal(": ")
                         .withColor(config.messageColor.toColor())
-                )
-                .append(
-                    if (msg.isEmpty()) Component.empty()
-                    else buildMessageBodyComponent(strippedMsg, config.messageColor.toColor(), isMine)
-                )
+                    )
+            }
+            val bodyComponent = if (finalBody.isBlank()) {
+                Component.empty()
+            } else {
+                var body = buildMessageBodyComponent(finalBody, config.messageColor.toColor(), isMine)
+                if (config.nickHighlightEnabled) {
+                    body = recolorNickOfPlayer(body, Integer.decode(config.nickHighlightColor), bold = true)
+                }
+                body
+            }
+            formatted.append(bodyComponent)
+            if (displayNameRaw.isNotBlank()) {
+                formatted.append(buildQuoteActionComponent(quoteTargetNick, sourceIdFromBody))
+            }
 
-            RemoteBridgeApi.enqueueIngest(
-                kind = "guild",
-                author = senderNick,
-                text = strippedMsg.ifEmpty { text },
-                source = detectSourceId(match.group(2))
+            return ChatTransform.Replace(formatted)
+        }
+        return ChatTransform.Keep
+    }
+
+    private data class BracketSource(val sourceId: String, val nick: String, val body: String)
+
+    private fun parseBracketSourceLine(raw: String): BracketSource? {
+        val s = raw.trimStart()
+        if (config.minecraftMarker.isNotEmpty() && s.startsWith(config.minecraftMarker)) {
+            val rest = s.removePrefix(config.minecraftMarker).trimStart()
+            val dot = Regex("""^([^:→>]{1,64})(?:[→>]([^:]{1,64}))?\s*:\s*(.+)$""").find(rest) ?: return null
+            return BracketSource("minecraft", dot.groupValues[1].trim(), dot.groupValues[3].trim())
+        }
+        val m = BRACKET_SOURCE.matcher(s)
+        if (!m.matches()) return null
+        val sourceRaw = m.group(1).trim()
+        val nick = m.group(2).trim()
+        val body = m.group(3).trim()
+        val sourceId = when (sourceRaw.lowercase()) {
+            "telegram", "tg" -> "telegram"
+            "minecraft", "mc" -> "minecraft"
+            "discord", "ds", "dc" -> "discord"
+            else -> sourceRaw.trim()
+        }
+        return BracketSource(sourceId, nick, body)
+    }
+
+    private fun isDiscordSource(sourceId: String): Boolean {
+        return when (sourceId.lowercase()) {
+            "discord", "ds", "dc" -> true
+            else -> false
+        }
+    }
+
+    private fun buildSourceLabelForId(sourceId: String): Component {
+        val lower = sourceId.lowercase()
+        val (label, colorHex) = when {
+            lower == "telegram" || lower == "tg" -> config.telegramLabel to config.telegramLabelColor
+            lower == "minecraft" || lower == "mc" -> config.minecraftLabel to config.minecraftLabelColor
+            isDiscordSource(sourceId) -> config.discordLabel to config.discordLabelColor
+            sourceId.isNotBlank() -> "[$sourceId] " to config.minecraftLabelColor
+            else -> config.minecraftLabel to config.minecraftLabelColor
+        }
+        return Component.literal(label)
+            .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(colorHex))))
+    }
+
+    fun isLocalPlayerGuildLine(rawGuildLine: String): Boolean {
+        val parsed = com.nayoguildbridge.util.BridgeOutboundFilter.parseGuildLine(rawGuildLine) ?: return false
+        return isMyNick(parsed.first)
+    }
+
+    fun rememberOwnGuildLineIfVisible(rawGuildLine: String) {
+        if (!config.guildBridgeFormatEnabled) return
+        val parsed = com.nayoguildbridge.util.BridgeOutboundFilter.parseGuildLine(rawGuildLine) ?: return
+        val (speaker, body) = parsed
+        if (!isMyNick(speaker)) return
+        if (com.nayoguildbridge.util.BridgeOutboundFilter.isBridgeRelayPayload(body)) return
+        BridgeChatDedupe.remember(BridgeChatDedupe.keyFor(speaker, body))
+    }
+
+    private fun formatRelayedQuoteMessage(raw: String, botNick: String): Component? {
+        val body = raw.trimStart().removePrefix("[QUOTE]").trimStart()
+        val lines = body.lines().map { it.trim() }.filter { it.isNotBlank() }
+        if (lines.isEmpty()) return null
+
+        var quotedText = ""
+        var quotedUser = ""
+        var quotedSource = "Discord"
+        var replyUser = botNick
+        var replyText = ""
+
+        val quoteLine = lines.firstOrNull { it.startsWith(">") }
+        if (quoteLine != null) {
+            val q = quoteLine.removePrefix(">").trimStart()
+            val m = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""").find(q)
+            if (m != null) {
+                quotedSource = BridgeTextUtil.normalizeSourceTag(m.groupValues[1]) ?: "Discord"
+                quotedUser = m.groupValues[2].trim()
+                quotedText = BridgeTextUtil.stripBridgeFormatting(m.groupValues[3])
+            }
+        }
+
+        val last = lines.last()
+        val arrow = Regex("""^\.?([^→>]{1,64})[→>]\s*([^:]{1,64}):\s*(.+)$""").find(last)
+        if (arrow != null) {
+            replyUser = arrow.groupValues[1].trim()
+            quotedUser = arrow.groupValues[2].trim().ifBlank { quotedUser }
+            replyText = BridgeTextUtil.stripBridgeFormatting(arrow.groupValues[3])
+        } else {
+            val plain = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""").find(last)
+            if (plain != null) {
+                replyUser = plain.groupValues[2].trim()
+                replyText = BridgeTextUtil.stripBridgeFormatting(plain.groupValues[3])
+            } else {
+                replyText = BridgeTextUtil.stripBridgeFormatting(last)
+            }
+        }
+
+        if (replyText.isBlank() && quotedText.isBlank()) return null
+
+        val senderComponent = buildSenderNameComponent(replyUser, config.nameColor.toColor(), isMyNick(replyUser))
+        val quoteBody = if (quotedText.isNotBlank()) quotedText else "—"
+        val replyBody = replyText.ifBlank { " " }
+
+        return Component.empty()
+            .append(buildSourceLabelForId(quotedSource.lowercase()))
+            .append(senderComponent)
+            .append(Component.literal(": ").withColor(config.messageColor.toColor()))
+            .append(
+                QuoteDisplay.buildInlineQuoteReply(quoteBody, replyBody) { reply ->
+                    buildMessageWithWordHighlights(reply, config.messageColor.toColor(), isMyNick(replyUser))
+                }
             )
-
-            return formatted
-        }
-        return message
+            .append(buildQuoteActionComponent(quotedUser.ifBlank { replyUser }, quotedSource.lowercase()))
     }
 
-    // Ет отвечает за проверку формы bridged-сообщения
-    private fun looksLikeBridgedPayload(body: String, speakerIsBridgeBot: Boolean): Boolean {
-        val s = body.trimStart()
-        if (s.isEmpty()) return false
-
-        val botListConfigured = config.bridgeBotNames.isNotEmpty()
-        if (botListConfigured && !speakerIsBridgeBot) {
-            return false
-        }
-
-        if (config.telegramMarker.isNotEmpty() && s.startsWith(config.telegramMarker)) return true
-        if (config.minecraftMarker.isNotEmpty() && s.startsWith(config.minecraftMarker)) return true
-
-        val tgLabel = config.telegramLabel.trimStart()
-        val dcLabel = config.discordLabel.trimStart()
-        val mcLabel = config.minecraftLabel.trimStart()
-        if (tgLabel.isNotEmpty() && s.startsWith(tgLabel)) return true
-        if (dcLabel.isNotEmpty() && s.startsWith(dcLabel)) return true
-        if (mcLabel.isNotEmpty() && s.startsWith(mcLabel)) return true
-
-        val idx = s.indexOf(':')
-        if (idx in 2..24) {
-            val left = s.substring(0, idx)
-            if (!left.contains(' ') && left.all { it.isLetterOrDigit() || it == '_' || it == '-' }) return true
-        }
-        return false
-    }
-
-    // Ет отвечает за получение тела сообщения после Guild >
     private fun guildChatBodyOrFull(unformatted: String): String {
         val match = compile(GUILD_PATTERN).matcher(unformatted)
         return if (match.matches()) match.group(2) else unformatted
@@ -171,11 +355,15 @@ object NayoGuildBridge : ModInitializer {
         return Integer.decode(this)
     }
 
-    private fun shouldBlock(text: String): Boolean {
+    private fun shouldBlock(username: String, text: String): Boolean {
         val list = config.blockList
         if (list.isEmpty()) return false
-        val lower = text.lowercase()
-        return list.any { it.isNotBlank() && lower.contains(it.lowercase()) }
+        val lowerText = text.lowercase()
+        val lowerUser = username.lowercase()
+        return list.any { term ->
+            val t = term.trim().lowercase()
+            t.isNotBlank() && (lowerText.contains(t) || lowerUser == t || lowerUser.contains(t))
+        }
     }
 
     private fun recolorNickOfPlayer(component: Component, rgb: Int, bold: Boolean): Component {
@@ -219,6 +407,9 @@ object NayoGuildBridge : ModInitializer {
     private fun buildSourcePrefixAndStrip(raw: String): Pair<Component, String> {
         val tgMarker = config.telegramMarker
         val mcMarker = config.minecraftMarker
+        val tgLabel = config.telegramLabel.trimStart()
+        val dcLabel = config.discordLabel.trimStart()
+        val mcLabel = config.minecraftLabel.trimStart()
 
         var body = raw
         val (labelText, labelColor) = when {
@@ -226,13 +417,27 @@ object NayoGuildBridge : ModInitializer {
                 body = body.removePrefix(tgMarker).trimStart()
                 config.telegramLabel to config.telegramLabelColor
             }
-
             mcMarker.isNotEmpty() && body.startsWith(mcMarker) -> {
                 body = body.removePrefix(mcMarker).trimStart()
                 config.minecraftLabel to config.minecraftLabelColor
             }
-
-            else -> config.discordLabel to config.discordLabelColor
+            tgLabel.isNotEmpty() && body.startsWith(tgLabel) -> {
+                body = body.removePrefix(tgLabel).trimStart()
+                config.telegramLabel to config.telegramLabelColor
+            }
+            mcLabel.isNotEmpty() && body.startsWith(mcLabel) -> {
+                body = body.removePrefix(mcLabel).trimStart()
+                config.minecraftLabel to config.minecraftLabelColor
+            }
+            dcLabel.isNotEmpty() && body.startsWith(dcLabel) -> {
+                body = body.removePrefix(dcLabel).trimStart()
+                config.discordLabel to config.discordLabelColor
+            }
+            body.startsWith("[DC]", ignoreCase = true) -> {
+                body = body.removePrefix("[DC]").trimStart()
+                config.discordLabel to config.discordLabelColor
+            }
+            else -> return Component.empty() to body
         }
 
         val label = Component.literal(labelText)
@@ -243,10 +448,29 @@ object NayoGuildBridge : ModInitializer {
 
     private fun detectSourceId(rawBody: String): String {
         val body = rawBody.trimStart()
+        val tgLabel = config.telegramLabel.trimStart()
+        val dcLabel = config.discordLabel.trimStart()
+        val mcLabel = config.minecraftLabel.trimStart()
         return when {
             config.telegramMarker.isNotEmpty() && body.startsWith(config.telegramMarker) -> "telegram"
             config.minecraftMarker.isNotEmpty() && body.startsWith(config.minecraftMarker) -> "minecraft"
-            else -> "discord"
+            tgLabel.isNotEmpty() && body.startsWith(tgLabel) -> "telegram"
+            mcLabel.isNotEmpty() && body.startsWith(mcLabel) -> "minecraft"
+            dcLabel.isNotEmpty() && body.startsWith(dcLabel) -> "discord"
+            body.startsWith("[DC]", ignoreCase = true) -> "discord"
+            else -> {
+                val bracket = BRACKET_SOURCE.matcher(body)
+                if (bracket.matches()) {
+                    when (bracket.group(1).trim().lowercase()) {
+                        "telegram", "tg" -> "telegram"
+                        "minecraft", "mc" -> "minecraft"
+                        "discord", "ds", "dc" -> "discord"
+                        else -> bracket.group(1).trim()
+                    }
+                } else {
+                    "minecraft"
+                }
+            }
         }
     }
 
@@ -254,6 +478,16 @@ object NayoGuildBridge : ModInitializer {
         val list = config.bridgeBotNames
         if (list.isEmpty()) return false
         return list.any { it.isNotBlank() && nick.equals(it, ignoreCase = true) }
+    }
+
+    private fun isIgnoredByPlayer(nick: String): Boolean {
+        if (nick.isBlank()) return false
+        return config.imsIgnorePlayers.any { it.equals(nick, ignoreCase = true) }
+    }
+
+    private fun isIgnoredByOrigin(origin: String): Boolean {
+        if (origin.isBlank()) return false
+        return config.imsIgnoreOrigins.any { it.equals(origin, ignoreCase = true) }
     }
 
     private fun isFromBridgeBotText(unformatted: String): Boolean {
@@ -274,7 +508,6 @@ object NayoGuildBridge : ModInitializer {
         val s = raw.trim()
         if (s.isEmpty()) return null
 
-        // Ет отвечает за формат Nick > message
         val gt = s.indexOf('>')
         if (gt in 1..40) {
             val left = s.substring(0, gt).trim()
@@ -287,7 +520,6 @@ object NayoGuildBridge : ModInitializer {
             }
         }
 
-        // Ет отвечает за формат Nick: message
         val colon = s.indexOf(':')
         if (colon in 1..40) {
             val left = s.substring(0, colon).trim()
@@ -298,7 +530,6 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun buildSenderNameComponent(namePartRaw: String, nameColor: Int, isMine: Boolean): Component {
-        // Ет отвечает за покраску имени отправителя
         var s = namePartRaw.replaceFirst(Regex(":$"), "").trim()
         if (s.isEmpty()) return Component.empty()
 
@@ -310,7 +541,6 @@ object NayoGuildBridge : ModInitializer {
             else -> null
         }
 
-        // Ет отвечает за сохранение тегов [LVL]/рангов
         val prefix = StringBuilder()
         while (s.startsWith("[")) {
             val end = s.indexOf(']')
@@ -320,7 +550,6 @@ object NayoGuildBridge : ModInitializer {
             if (s.isNotEmpty() && !s.startsWith("[")) prefix.append(" ")
         }
 
-        // Ет отвечает за выделение ника из начала строки
         val firstToken = s.split(" ").firstOrNull().orEmpty()
         val arrowPos = firstToken.indexOf('→')
         val nick = if (arrowPos > 0) firstToken.substring(0, arrowPos) else firstToken
@@ -379,24 +608,25 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun buildMessageWithWordHighlights(text: String, baseColor: Int, isMine: Boolean): Component {
+        val processed = ChatQoL.applyIncomingBody(text)
         val baseStyle = Style.EMPTY.withColor(TextColor.fromRgb(baseColor))
         if (!config.wordHighlightEnabled) {
-            return Component.literal(text).withStyle(baseStyle)
+            return ChatQoL.toDisplayComponent(processed).withStyle(baseStyle)
         }
         if (config.wordHighlightOnlyMine && !isMine) {
-            return Component.literal(text).withStyle(baseStyle)
+            return ChatQoL.toDisplayComponent(processed).withStyle(baseStyle)
         }
 
         val rules = parseWordHighlightRules(config.wordHighlightRules)
         if (rules.isEmpty()) {
-            return Component.literal(text).withStyle(baseStyle)
+            return ChatQoL.toDisplayComponent(processed).withStyle(baseStyle)
         }
 
-        val lower = text.lowercase()
+        val lower = processed.lowercase()
         val out: MutableComponent = Component.empty()
 
         var i = 0
-        while (i < text.length) {
+        while (i < processed.length) {
             var bestStart = -1
             var bestEnd = -1
             var bestStyle: Style? = null
@@ -412,14 +642,14 @@ object NayoGuildBridge : ModInitializer {
             }
 
             if (bestStart < 0 || bestStyle == null) {
-                out.append(Component.literal(text.substring(i)).withStyle(baseStyle))
+                out.append(ChatQoL.toDisplayComponent(processed.substring(i)).withStyle(baseStyle))
                 break
             }
 
             if (bestStart > i) {
-                out.append(Component.literal(text.substring(i, bestStart)).withStyle(baseStyle))
+                out.append(ChatQoL.toDisplayComponent(processed.substring(i, bestStart)).withStyle(baseStyle))
             }
-            out.append(Component.literal(text.substring(bestStart, bestEnd)).withStyle(bestStyle))
+            out.append(Component.literal(processed.substring(bestStart, bestEnd)).withStyle(bestStyle))
             i = bestEnd
         }
 
@@ -427,13 +657,86 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun buildMessageBodyComponent(text: String, baseColor: Int, isMine: Boolean): Component {
+        val quotePair = QuoteDetector.parseIncomingQuoteBody(text)
+        if (quotePair != null) {
+            val (quoted, reply) = quotePair
+            return QuoteDisplay.buildInlineQuoteReply(quoted, reply) { replyText ->
+                buildMessageWithWordHighlights(replyText, baseColor, isMine)
+            }
+        }
         return buildMessageWithWordHighlights(text, baseColor, isMine)
+    }
+
+    private fun extractQuotedAuthor(quotedLine: String): String? {
+        val bracket = Regex("^\\[([^\\]]+)]\\s+([^:>]{1,64})\\s*:").find(quotedLine.trim())
+        if (bracket != null) return bracket.groupValues[2].trim().ifBlank { null }
+        val plain = Regex("^([^:>]{1,64})\\s*:").find(quotedLine.trim())
+        return plain?.groupValues?.getOrNull(1)?.trim()?.ifBlank { null }
+    }
+
+    private fun extractReplyTarget(namePartRaw: String): String? {
+        val lower = namePartRaw.lowercase()
+        val key = "replied to "
+        val idx = lower.indexOf(key)
+        if (idx >= 0) {
+            val after = namePartRaw.substring(idx + key.length).trimStart()
+            val target = after.split(" ").firstOrNull().orEmpty().trim()
+            return target.ifEmpty { null }
+        }
+        val gt = namePartRaw.indexOf('>')
+        if (gt in 1..40) {
+            val target = namePartRaw.substring(0, gt).trim()
+            if (target.isNotEmpty() && !target.contains(':')) return target
+        }
+        return null
+    }
+
+    private fun looksLikeReplyName(namePartRaw: String): Boolean {
+        val s = namePartRaw.trim()
+        if (s.isEmpty()) return false
+        if (s.contains("replied to", ignoreCase = true)) return true
+        if (s.contains('→')) return true
+        return false
+    }
+
+    private fun buildReplyMarkerComponent(): Component {
+        return Component.literal(".")
+            .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0x8A8D93)).withBold(true))
+    }
+
+    private fun extractQuotePrefillTarget(namePartRaw: String, fallback: String): String {
+        val compact = namePartRaw.trim()
+        val arrow = compact.indexOf('→')
+        if (arrow in 1..80) {
+            val after = compact.substring(arrow + 1).trim()
+            val target = after.replace(":", "").split(" ").firstOrNull().orEmpty().trim()
+            if (target.isNotEmpty()) return target
+        }
+        val reply = extractReplyTarget(namePartRaw)
+        if (!reply.isNullOrBlank()) return reply
+        return fallback
+    }
+
+    private fun sourceLabelForId(sourceId: String): String {
+        return when (sourceId.lowercase()) {
+            "telegram" -> "Telegram"
+            "minecraft" -> "Minecraft"
+            else -> "Discord"
+        }
+    }
+
+    private fun buildQuoteActionComponent(senderNick: String, sourceId: String = "discord"): Component {
+        if (!config.quoteSystemEnabled) return Component.empty()
+        if (senderNick.isBlank()) return Component.empty()
+        val cleanNick = senderNick.replace(":", "").trim()
+        if (cleanNick.isBlank()) return Component.empty()
+        return Component.literal(" [q]")
+            .withStyle(QuoteClickHelper.quoteButtonStyle(QuoteClickHelper.quotePrefill(cleanNick, sourceId)))
     }
 
     private fun extractSenderNick(namePartRaw: String): String {
         var s = namePartRaw.replaceFirst(Regex(":$"), "").trim()
         if (s.isEmpty()) return ""
-        // Ет отвечает за очистку тегов перед ником
         while (s.startsWith("[")) {
             val end = s.indexOf(']')
             if (end <= 0) break
@@ -462,7 +765,6 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun parseWordHighlightRules(raw: String): List<Pair<String, Style>> {
-        // Ет отвечает за разбор правил подсветки слов
         val parts = raw
             .split("\n", ";", ",")
             .map { it.trim() }
@@ -521,7 +823,15 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun formatBridgeCommandMessage(message: Component, unformatted: String): Component {
-        // Ет отвечает за определение командного ответа бриджа
+        val guildCmd = compile(GUILD_PATTERN).matcher(unformatted)
+        if (guildCmd.matches()) {
+            val u = guildCmd.group(1)
+            val b = guildCmd.group(2)
+            if (!GuildChatClassifier.shouldApplyBridgeFormat(unformatted, u, b)) {
+                return message
+            }
+        }
+
         val lower = unformatted.lowercase()
         val fromBridgeBot = isFromBridgeBotText(unformatted)
         val commandShapeByBot =
@@ -572,18 +882,18 @@ object NayoGuildBridge : ModInitializer {
                 .append(buildSenderNameComponent(nick, config.nameColor.toColor(), isMine))
                 .append(Component.literal(": ").withColor(config.messageColor.toColor()))
                 .append(buildMessageBodyComponent(rest, config.messageColor.toColor(), isMine))
+                .append(buildQuoteActionComponent(extractQuotePrefillTarget(nick, nick), detectSourceId(cmdBody)))
         }
 
-        val tag: MutableComponent = Component.empty()
-            .append(Component.literal("[")
-                .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00))))
-            .append(Component.literal("BridgeCMD")
-                .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFD700)).withBold(true)))
-            .append(Component.literal("] ")
-                .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00))))
-            .append(Component.literal(cleanedText).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFFFAA))))
-
-        return tag
+        return Component.empty()
+            .append(
+                Component.literal("[CMD] ")
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFAA00)).withBold(true))
+            )
+            .append(
+                Component.literal(cleanedText)
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xFFFFAA)))
+            )
     }
 
     private enum class ChatChannel {

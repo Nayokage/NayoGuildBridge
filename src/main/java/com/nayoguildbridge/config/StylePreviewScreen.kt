@@ -6,7 +6,6 @@ import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
-// Ет отвечает за предпросмотр §-кодов и цветов
 class StylePreviewScreen(private val parent: Screen?) : Screen(Component.literal("§ Codes Preview")) {
 
     override fun init() {

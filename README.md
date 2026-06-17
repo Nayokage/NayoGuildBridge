@@ -10,7 +10,9 @@ A client-side Fabric mod for cleaner bridged chat in Guild.
 - Sender nick styling via plain color or Minecraft `§` codes.
 - Nick and keyword highlighting (`word=§codes` rules).
 - Blocklist filtering for unwanted content.
-- Optional backend sync (`/api/ingest` + `/api/poll`). (Api dont work)
+- Quote system: send to `POST /api/messages` (Discord/TG via webhook or br1dgebtw bot).
+- Optional backend sync (`/api/ingest` + `/api/poll`) — see `bridge-site/QUOTES_FLOW.md`.
+- Server deploy (PM2, same VDS as API): `bridge-site/DEPLOY_PM2.md`.
 
 ## Supported Versions
 

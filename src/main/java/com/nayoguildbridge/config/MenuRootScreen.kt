@@ -6,7 +6,6 @@ import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
-// Ет отвечает за главное меню /bridge
 class MenuRootScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Bridge Filter")) {
 
     override fun init() {

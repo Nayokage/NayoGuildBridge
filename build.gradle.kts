@@ -27,7 +27,13 @@ dependencies {
 	modImplementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
 
 	modApi("com.terraformersmc:modmenu:16.0.0")
-	modApi("maven.modrinth:1eAoo2KR:3.8.2+1.21.10-fabric") // YACL3
+	modApi("maven.modrinth:1eAoo2KR:3.8.2+1.21.10-fabric")
+
+	implementation("org.java-websocket:Java-WebSocket:1.5.7")
+	include("org.java-websocket:Java-WebSocket:1.5.7")
+
+	testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
 }
 
 tasks.processResources {
@@ -61,6 +67,19 @@ tasks.jar {
 	from("LICENSE") {
 		rename { "${it}_${base.archivesName.get()}" }
 	}
+}
+
+tasks.test {
+	useJUnitPlatform()
+}
+
+tasks.register("rebuild") {
+	group = "build"
+	description = "Clean and rebuild the mod (clean + build)"
+	dependsOn("clean", "build")
+}
+tasks.named("build").configure {
+	mustRunAfter("clean")
 }
 
 publishing {

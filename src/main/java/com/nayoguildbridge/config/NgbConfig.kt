@@ -1,48 +1,97 @@
 package com.nayoguildbridge.config
 
 import com.nayoguildbridge.NayoGuildBridge.logger
+import com.nayoguildbridge.guard.EnvironmentGuard
+import com.nayoguildbridge.ims.ImsBridgeClient
 import java.io.File
 import com.google.gson.GsonBuilder
 
 data class Config(
     var bridgeEnabled: Boolean = true,
+    var quoteSystemEnabled: Boolean = true,
+    var quoteApiUrl: String = "",
+    var quoteApiUrlBackup: String = "",
     var hideBotName: Boolean = false,
     var remoteBridgeEnabled: Boolean = false,
-    var remoteBridgeUrl: String = "https://bridgeapi.fiokem.cc",
-    var remoteBridgeUrlBackup: String = "https://apisitetest123321.vercel.app",
+    var remoteBridgeSendQuotes: Boolean = true,
+    var remoteBridgeUrl: String = "",
+    var remoteBridgeUrlBackup: String = "",
     var remoteBridgeChannelId: String = "default",
     var remoteBridgePollMs: Int = 1500,
+
+    var bridgeBackend: String = "bridge-site",
+
+    var bridgePollEnabled: Boolean = true,
+    var bridgePollDisplayInChat: Boolean = false,
+    var bridgePollOnlyWhenWsOffline: Boolean = true,
+    var bridgePollChannelId: String = "default",
+    var bridgePollMs: Int = 1500,
+
+    var platformBridgeEnabled: Boolean = false,
+    var platformApiUrl: String = "http://127.0.0.1:4000",
+    var platformWsUrl: String = "ws://127.0.0.1:4000/ws",
+    var platformInstanceToken: String = "",
+    var platformReconnectMs: Int = 5000,
+
+    var environmentGuardEnabled: Boolean = false,
+    var requireHypixel: Boolean = true,
+    var hypixelGuildName: String = "",
+
+    var menuLanguage: String = "auto",
+
+    var configVersion: Int = 0,
+
+    var imsBridgeEnabled: Boolean = false,
+    var imsAuthByNick: Boolean = true,
+    var bridgeKey: String = "",
+    var imsGuildSlug: String = "",
+    var imsWsUrl: String = "ws://127.0.0.1:4000/ws",
+    var imsBridgeReceiveEnabled: Boolean = true,
+    var imsCombinedBridgeEnabled: Boolean = false,
+    var imsCombinedBridgeChatEnabled: Boolean = false,
+    var imsPartyBridgeEnabled: Boolean = false,
+    var imsWebOnlyMode: Boolean = false,
+    var imsQuoteOverWsEnabled: Boolean = false,
+    var imsGuildTag: String = "",
+    var imsGuildColor: String = "§a",
+    var imsBridgePrefix: String = "§aGui§ald > ",
+    var imsBridgeMessageColor: String = "§f",
+    var imsCombinedPrefix: String = "§dCB > ",
+    var imsCombinedMessageColor: String = "§f",
+    var imsIgnorePlayers: List<String> = emptyList(),
+    var imsIgnoreOrigins: List<String> = emptyList(),
+    var collapseChat: Boolean = true,
+    var unlimitedChat: Boolean = true,
+    var emojiShortcodesEnabled: Boolean = true,
+    var linkPreviewEnabled: Boolean = true,
+    var imagePreviewEnabled: Boolean = true,
+    var updateCheckEnabled: Boolean = true,
+    var bridgeBotFormatEnabled: Boolean = false,
+    var copyChatEnabled: Boolean = true,
+    var persistentChatEnabled: Boolean = false,
+
     var bridgeBotNames: List<String> = listOf(
-        "etobridge",
-        "koorikage",
-        "mothikh",
-        "tenokage",
-        "uzbekf3ndi",
-        "gem_zz",
-        "Bakr__X"
+        "Electoral_Goon",
+        "etobridge"
     ),
+    var prefixColor: String = "#55FF55",
     var nameColor: String = "#8F99FF",
     var messageColor: String = "#C1C3C7",
+    var officerPrefixColor: String = "#FF5555",
 
-    // Ет отвечает за базовые фильтры и формат
     var blockList: List<String> = emptyList(),
     var nickHighlightEnabled: Boolean = true,
     var nickHighlightColor: String = "#FFFF00",
     var guildBridgeFormatEnabled: Boolean = true,
     var bridgeCommandFormatEnabled: Boolean = true,
 
-    // Ет отвечает за цвет ника отправителя
     var senderNickColorEnabled: Boolean = false,
     var senderNickColor: String = "#55FFFF",
-    // Ет отвечает за §-формат ника (вместо обычного цвета)
     var senderNickLegacyEnabled: Boolean = false,
     var senderNickLegacyCodes: String = "§4",
-    // Ет отвечает за стиль только для моего ника
     var senderNickStyleOnlyMine: Boolean = false,
-    // Ет отвечает за доп алиасы моего ника
     var myNickAliases: List<String> = emptyList(),
 
-    // Ет отвечает за маркеры источника (ТГ/Дискорд/Майн)
     var telegramMarker: String = "[TG]",
     var minecraftMarker: String = ".",
     var telegramLabel: String = "[Telegram] ",
@@ -52,14 +101,14 @@ data class Config(
     var discordLabelColor: String = "#5555FF",
     var minecraftLabelColor: String = "#55FF55",
 
-    // Ет отвечает за подсветку слов по правилам
     var wordHighlightEnabled: Boolean = false,
     var wordHighlightRules: String = "",
-    // Ет отвечает за подсветку слов только для моего ника
     var wordHighlightOnlyMine: Boolean = false
 )
 
 object NgbConfig {
+    private const val CURRENT_CONFIG_VERSION = 6
+
     private val gson = GsonBuilder()
         .setPrettyPrinting()
         .create()
@@ -69,7 +118,7 @@ object NgbConfig {
     var config = Config()
 
     fun save() {
-
+        BridgeEndpoints.applyTo(config)
         try {
             file.parentFile?.let { parent ->
                 if (!parent.exists()) {
@@ -88,6 +137,8 @@ object NgbConfig {
             file.exists() -> file
             legacyFile.exists() -> legacyFile
             else -> {
+                config = Config()
+                BridgeEndpoints.applyTo(config)
                 logger.info("Config file not found, new created.")
                 save()
                 return
@@ -96,9 +147,86 @@ object NgbConfig {
 
         val json = source.readText()
         config = gson.fromJson(json, Config::class.java) ?: Config()
+        BridgeEndpoints.applyTo(config)
+        migrateConfig()
+        syncTransportWithFeatures()
+        applyBackendDefaults()
+        save()
         if (source == legacyFile) {
             logger.info("Migrated config from chatbridge.json to nayoguildbridge.json")
-            save()
+        }
+        EnvironmentGuard.resetAfterConfigLoad()
+    }
+
+    private fun migrateConfig() {
+        if (config.configVersion >= CURRENT_CONFIG_VERSION) return
+        logger.info("[NayoGuildBridge] Обновление конфига до v$CURRENT_CONFIG_VERSION")
+        if (config.configVersion < 3) {
+            config.environmentGuardEnabled = false
+            config.requireHypixel = false
+            config.hypixelGuildName = ""
+            config.bridgeBackend = "bridge-site"
+        }
+        if (config.configVersion < 4) {
+            config.remoteBridgeEnabled = false
+            config.bridgePollEnabled = true
+            config.bridgePollDisplayInChat = false
+            config.bridgePollOnlyWhenWsOffline = true
+        }
+        if (config.configVersion < 5) {
+            val knownBots = setOf("electoral_goon", "etobridge")
+            config.bridgeBotNames = config.bridgeBotNames.filter { name ->
+                val n = name.trim()
+                n.isNotBlank() && (
+                    knownBots.contains(n.lowercase()) ||
+                        n.contains("bridge", ignoreCase = true) ||
+                        n.contains("бридж", ignoreCase = true)
+                    )
+            }.ifEmpty { listOf("Electoral_Goon") }
+        }
+        if (config.configVersion < 6) {
+            if (!config.bridgeBotNames.any { it.equals("Electoral_Goon", ignoreCase = true) }) {
+                config.bridgeBotNames = config.bridgeBotNames + "Electoral_Goon"
+            }
+            config.quoteSystemEnabled = true
+            config.bridgeEnabled = true
+            config.bridgeBotFormatEnabled = false
+        }
+        config.configVersion = CURRENT_CONFIG_VERSION
+    }
+
+    private fun syncTransportWithFeatures() {
+        if (config.imsWebOnlyMode) {
+            config.imsBridgeEnabled = true
+        }
+    }
+
+    fun applyWorkingDefaults() {
+        config.environmentGuardEnabled = false
+        config.requireHypixel = false
+        config.hypixelGuildName = ""
+        config.imsBridgeEnabled = false
+        config.imsCombinedBridgeEnabled = false
+        config.imsCombinedBridgeChatEnabled = false
+        config.imsQuoteOverWsEnabled = false
+        config.imsWebOnlyMode = false
+        config.remoteBridgeEnabled = false
+        config.bridgePollEnabled = true
+        config.bridgePollDisplayInChat = false
+        config.bridgePollOnlyWhenWsOffline = true
+        config.quoteSystemEnabled = true
+        config.bridgeEnabled = true
+        config.bridgeBotNames = listOf("Electoral_Goon", "etobridge")
+        BridgeEndpoints.applyTo(config)
+        config.configVersion = CURRENT_CONFIG_VERSION
+        save()
+        EnvironmentGuard.resetAfterConfigLoad()
+        ImsBridgeClient.disconnect()
+    }
+
+    private fun applyBackendDefaults() {
+        if (config.bridgeBackend.equals("bridge-site", ignoreCase = true)) {
+            if (!config.bridgePollEnabled) config.bridgePollEnabled = true
         }
     }
 }

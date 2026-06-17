@@ -7,7 +7,6 @@ import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
-// Ет отвечает за ванильное меню, если YACL/Cloth нет
 class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Bridge Filter")) {
 
     private var bridgeEnabled = NgbConfig.config.bridgeEnabled
@@ -180,7 +179,6 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
     private fun applyAndSave() {
         val cfg = NgbConfig.config
         cfg.bridgeEnabled = bridgeEnabled
-        // Ет отвечает за сохранение блоклиста через запятую/новую строку
         cfg.blockList = blockListBox.value
             .split("\n", ",")
             .map { it.trim() }

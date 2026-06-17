@@ -1,6 +1,7 @@
 package com.nayoguildbridge.remote
 
 import com.nayoguildbridge.NayoGuildBridge
+import com.nayoguildbridge.bridge.BridgeRouter
 import com.nayoguildbridge.config.NgbConfig
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -29,19 +30,13 @@ object RemoteBridgeApi {
     @Volatile
     private var lastPollAtMs: Long = 0L
 
-    private fun baseUrls(): List<String> {
-        val cfg = NgbConfig.config
-        val primary = cfg.remoteBridgeUrl.trim().trimEnd('/')
-        val backup = cfg.remoteBridgeUrlBackup.trim().trimEnd('/')
-        return listOf(primary, backup).filter { it.isNotBlank() }.distinct()
-    }
+    private fun baseUrls(): List<String> = BridgeRouter.httpApiBases()
 
     private fun playerKey(): String {
         val player = Minecraft.getInstance().player
         return player?.name?.string?.trim().orEmpty().ifBlank { "unknown-player" }
     }
 
-    // Ет отвечает за общий тумблер: bridgeEnabled + remoteBridgeEnabled
     private fun isRemoteBridgeActive(): Boolean {
         val cfg = NgbConfig.config
         return cfg.bridgeEnabled && cfg.remoteBridgeEnabled
@@ -96,7 +91,6 @@ object RemoteBridgeApi {
                         break
                     }
                 } catch (_: Throwable) {
-                    // Ет отвечает за фолбек на следующий URL
                 }
             }
             if (!sent) {
@@ -133,7 +127,6 @@ object RemoteBridgeApi {
                         return@supplyAsync resp.body()
                     }
                 } catch (_: Throwable) {
-                    // Ет отвечает за фолбек на следующий URL
                 }
             }
             null
@@ -150,7 +143,6 @@ object RemoteBridgeApi {
                         val obj = el.asJsonObject
                         val text = obj.get("text")?.asString ?: continue
                         val mode = obj.get("mode")?.asString ?: "chat"
-                        // Ет отвечает за вывод без дубля префиксов
                         when (mode) {
                             "suggest" -> client.player?.displayClientMessage(
                                 Component.literal("§b◇ §f$text"),
