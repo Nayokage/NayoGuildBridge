@@ -21,6 +21,12 @@ class GuildChatClassifierTest {
     }
 
     @Test
+    fun russianNonBridgeRankKeepsHypixel() {
+        val line = "Guild > [Главный Модератор] WaterSpais [СТРАНЫ СНГ]: обычное сообщение"
+        assertFalse(GuildChatClassifier.shouldApplyBridgeFormat(line, "WaterSpais", "обычное сообщение"))
+    }
+
+    @Test
     fun bridgeRankPlainTextKeepsHypixel() {
         val line = "Guild > Skyfidon [Бридж]: и функционал чата сломался"
         assertFalse(GuildChatClassifier.shouldApplyBridgeFormat(line, "Skyfidon", "и функционал чата сломался"))
@@ -29,6 +35,12 @@ class GuildChatClassifierTest {
     @Test
     fun bridgeRankNestedRelayFormats() {
         val line = "Guild > oSeptember11 [Бридж]: Nayokage: 💀"
+        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "Nayokage: 💀"))
+    }
+
+    @Test
+    fun russianBridgeRankAliasFormatsNestedRelay() {
+        val line = "Guild > oSeptember11 [Мост]: Nayokage: 💀"
         assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "Nayokage: 💀"))
     }
 

@@ -50,8 +50,9 @@ object IncomingBridgeFormatter {
         }
 
         val quoted = root.get("quoted")?.asString == "true" || root.get("quoted")?.asBoolean == true
-        val quotedText = root.get("quotedText")?.asString
-        val quotedFromUser = root.get("quotedFromUser")?.asString
+        val quotedText = firstString(root, "quotedText", "quotedMessage", "replyToPreview")
+            ?.let { QuoteDetector.cleanIncomingQuoteText(it) }
+        val quotedFromUser = firstString(root, "quotedFromUser", "replyToUser")
         val isCommand = root.get("isCommand")?.asString == "true" || root.get("isCommand")?.asBoolean == true
 
         val images = mutableListOf<String>()
@@ -95,6 +96,27 @@ object IncomingBridgeFormatter {
             return parseQuoteBlock(raw)
         }
 
+        val combinedMatch = Regex("""^\[B]\s+([^:]{1,64}):\s*(.+)$""").find(raw)
+        if (combinedMatch != null) {
+            return IncomingMessage(
+                source = "minecraft",
+                username = combinedMatch.groupValues[1].trim(),
+                body = combinedMatch.groupValues[2].trim(),
+                combined = true,
+                imageUrls = ChatQoL.extractImageUrls(combinedMatch.groupValues[2])
+            )
+        }
+
+        val combinedShow = Regex("""^\[B]\s+(\S+)\s+(.+)$""").find(raw)
+        if (combinedShow != null && raw.contains(" is holding ", ignoreCase = true)) {
+            return IncomingMessage(
+                source = "minecraft",
+                username = combinedShow.groupValues[1].trim(),
+                body = combinedShow.groupValues[2].trim(),
+                combined = true
+            )
+        }
+
         val quoteInline = Regex("""^>\s*\[([^\]]+)]\s+([^:]+):\s*(.+?)\s+(\[[^\]]+]\s+[^:]+:.*)$""").find(raw)
         if (quoteInline != null) {
             val source = quoteInline.groupValues[1].trim()
@@ -121,14 +143,14 @@ object IncomingBridgeFormatter {
         )
 
         val (source, user, body) = parsed
-        val quotePair = QuoteDetector.parseIncomingQuoteBody(body)
+        val quote = QuoteDetector.parseIncomingQuote(body)
         return IncomingMessage(
             source = source,
             username = user,
-            body = quotePair?.second ?: body,
-            quoted = quotePair != null,
-            quotedText = quotePair?.first,
-            quotedFromUser = quotePair?.let { extractAuthorFromQuoteLine(it.first) } ?: user,
+            body = quote?.replyText ?: body,
+            quoted = quote != null,
+            quotedText = quote?.quotedText,
+            quotedFromUser = quote?.quotedFromUser ?: user,
             imageUrls = ChatQoL.extractImageUrls(body)
         )
     }
@@ -183,8 +205,11 @@ object IncomingBridgeFormatter {
         val out = Component.empty()
             .append(sourceLabelComponent(msg.source))
             .append(
-                Component.literal(msg.username)
-                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameColor)))
+                com.nayoguildbridge.bridge.ExternalGiBadgeRegistry.appendBadgePrefix(
+                    msg.username,
+                    Component.literal(msg.username)
+                        .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameColor)))
+                )
             )
             .append(
                 Component.literal(": ")
@@ -307,7 +332,7 @@ object IncomingBridgeFormatter {
             "mc", "minecraft" -> "minecraft"
             else -> "discord"
         }
-        out.append(QuoteClickHelper.quoteActionButton(msg.username, sourceId))
+        out.append(QuoteClickHelper.quoteActionButton(msg.username, sourceId, msg.body))
     }
 
     private fun configColorHex(hex: String): Int = try {
@@ -344,15 +369,15 @@ object IncomingBridgeFormatter {
         val rgb = legacyColorToRgb(msgColor)
 
         if (msg.quoted && !msg.quotedText.isNullOrBlank()) {
-            val quoted = msg.quotedText!!
+            val quoted = msg.quotedText
             return QuoteDisplay.buildInlineQuoteReply(quoted, bodyText) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }
         }
 
-        val quotePair = QuoteDetector.parseIncomingQuoteBody(bodyText)
-        if (quotePair != null) {
-            return QuoteDisplay.buildInlineQuoteReply(quotePair.first, quotePair.second) { reply ->
+        val quote = QuoteDetector.parseIncomingQuote(bodyText)
+        if (quote != null) {
+            return QuoteDisplay.buildInlineQuoteReply(quote.quotedText, quote.replyText) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }
         }
@@ -398,6 +423,16 @@ object IncomingBridgeFormatter {
             else -> m.groupValues[1].trim()
         }
         return Triple(source, m.groupValues[2].trim(), m.groupValues[3].trim())
+    }
+
+    private fun firstString(root: JsonObject, vararg names: String): String? {
+        for (name in names) {
+            val el = root.get(name) ?: continue
+            if (el.isJsonNull) continue
+            val value = el.asString?.trim().orEmpty()
+            if (value.isNotEmpty()) return value
+        }
+        return null
     }
 
     private fun parseQuoteBlock(raw: String): IncomingMessage? {

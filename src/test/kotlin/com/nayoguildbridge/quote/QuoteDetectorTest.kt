@@ -21,4 +21,15 @@ class QuoteDetectorTest {
         assertEquals("привет", quote.quotedMessage)
         assertEquals("NDFM7", quote.quotedFromUser)
     }
+
+    @Test
+    fun cleansIncomingTelegramQuoteBody() {
+        val quote = QuoteDetector.parseIncomingQuote(
+            "> [Telegram] Y3M112: цитируемый текст\n[Telegram] fiokem: ответ"
+        )
+        assertEquals("цитируемый текст", quote?.quotedText)
+        assertEquals("ответ", quote?.replyText)
+        assertEquals("Y3M112", quote?.quotedFromUser)
+        assertEquals("Telegram", quote?.quotedFromInstance)
+    }
 }

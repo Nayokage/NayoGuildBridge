@@ -25,7 +25,7 @@ import java.util.regex.Pattern.compile
 object NayoGuildBridge : ModInitializer {
     val logger: Logger = LoggerFactory.getLogger("nayoguildbridge")
     const val GUILD_PATTERN =
-        ("^(?:G|Guild|Officer) > (?:\\[(?:\\S+?)\\] )?(\\w+)(?: \\[(?:\\S+?)\\])?: ?(.+)$")
+        ("^(?:G|Guild|Officer)\\s*>\\s*(?:\\[[^\\]]+\\]\\s*)*([A-Za-z0-9_]{1,16})(?:\\s*\\[[^\\]]+\\])*\\s*:\\s*(.+)$")
     const val BRIDGE_PATTERN =
         ("^ *((?:.+?)(?: attached an? \\w+(?::|$)| replied to .+ with an? \\w+(?::|$)| replied to .+?(?::|$)|:))(?:(?: (.*)?$)|$)")
     private val STRIP_FORMATTING = compile("§\\w")
@@ -147,7 +147,7 @@ object NayoGuildBridge : ModInitializer {
                     bridgeMatcher.group(1) to (bridgeMatcher.group(2) ?: "")
                 } else {
                 parseBridgeSenderAndMessage(text) ?: when {
-                    fromKnownBridgeBot && config.hideBotName -> "" to text
+                    fromKnownBridgeBot || config.hideBotName -> "" to text
                     else -> username to text
                 }
                 }
@@ -160,11 +160,6 @@ object NayoGuildBridge : ModInitializer {
             }
             if (isIgnoredByPlayer(senderNick)) return ChatTransform.Hide
 
-            if (fromKnownBridgeBot && strippedMsg.isNotBlank()) {
-                val dedupeKey = BridgeChatDedupe.keyFor(senderNick, strippedMsg)
-                if (BridgeChatDedupe.seenRecently(dedupeKey)) return ChatTransform.Hide
-                BridgeChatDedupe.remember(dedupeKey)
-            }
             val quoteTargetNick = extractQuotePrefillTarget(name, senderNick)
             val isMine = isMyNick(senderNick)
             val isReplyLike = looksLikeReplyName(if (msg.isEmpty()) text else name)
@@ -216,7 +211,14 @@ object NayoGuildBridge : ModInitializer {
             }
             formatted.append(bodyComponent)
             if (displayNameRaw.isNotBlank()) {
-                formatted.append(buildQuoteActionComponent(quoteTargetNick, sourceIdFromBody))
+                formatted.append(buildQuoteActionComponent(quoteTargetNick, sourceIdFromBody, finalBody))
+            }
+
+            val displayUser = displayNameRaw.ifBlank { senderNick }
+            if (finalBody.isNotBlank() &&
+                !BridgeChatDedupe.claimIncoming(unformatted, displayUser, finalBody)
+            ) {
+                return ChatTransform.Hide
             }
 
             return ChatTransform.Replace(formatted)
@@ -334,7 +336,7 @@ object NayoGuildBridge : ModInitializer {
                     buildMessageWithWordHighlights(reply, config.messageColor.toColor(), isMyNick(replyUser))
                 }
             )
-            .append(buildQuoteActionComponent(quotedUser.ifBlank { replyUser }, quotedSource.lowercase()))
+            .append(buildQuoteActionComponent(quotedUser.ifBlank { replyUser }, quotedSource.lowercase(), replyBody))
     }
 
     private fun guildChatBodyOrFull(unformatted: String): String {
@@ -437,7 +439,26 @@ object NayoGuildBridge : ModInitializer {
                 body = body.removePrefix("[DC]").trimStart()
                 config.discordLabel to config.discordLabelColor
             }
-            else -> return Component.empty() to body
+            else -> {
+                val bracket = BRACKET_SOURCE.matcher(body)
+                if (bracket.matches()) {
+                    val sourceRaw = bracket.group(1).trim().lowercase()
+                    val labelPair = when {
+                        sourceRaw == "telegram" || sourceRaw == "tg" ->
+                            config.telegramLabel to config.telegramLabelColor
+                        sourceRaw == "minecraft" || sourceRaw == "mc" ->
+                            config.minecraftLabel to config.minecraftLabelColor
+                        sourceRaw == "discord" || sourceRaw == "ds" || sourceRaw == "dc" ->
+                            config.discordLabel to config.discordLabelColor
+                        else -> "[${bracket.group(1).trim()}] " to config.minecraftLabelColor
+                    }
+                    body = bracket.group(3).trim()
+                    val label = Component.literal(labelPair.first)
+                        .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(labelPair.second))))
+                    return label to body
+                }
+                return Component.empty() to body
+            }
         }
 
         val label = Component.literal(labelText)
@@ -604,7 +625,7 @@ object NayoGuildBridge : ModInitializer {
             }
         }
 
-        return out
+        return com.nayoguildbridge.bridge.ExternalGiBadgeRegistry.appendBadgePrefix(nick, out)
     }
 
     private fun buildMessageWithWordHighlights(text: String, baseColor: Int, isMine: Boolean): Component {
@@ -725,13 +746,13 @@ object NayoGuildBridge : ModInitializer {
         }
     }
 
-    private fun buildQuoteActionComponent(senderNick: String, sourceId: String = "discord"): Component {
+    private fun buildQuoteActionComponent(senderNick: String, sourceId: String = "discord", quotedText: String? = null): Component {
         if (!config.quoteSystemEnabled) return Component.empty()
         if (senderNick.isBlank()) return Component.empty()
         val cleanNick = senderNick.replace(":", "").trim()
         if (cleanNick.isBlank()) return Component.empty()
         return Component.literal(" [q]")
-            .withStyle(QuoteClickHelper.quoteButtonStyle(QuoteClickHelper.quotePrefill(cleanNick, sourceId)))
+            .withStyle(QuoteClickHelper.quoteButtonStyle(QuoteClickHelper.quotePrefill(cleanNick, sourceId, quotedText)))
     }
 
     private fun extractSenderNick(namePartRaw: String): String {
@@ -882,7 +903,7 @@ object NayoGuildBridge : ModInitializer {
                 .append(buildSenderNameComponent(nick, config.nameColor.toColor(), isMine))
                 .append(Component.literal(": ").withColor(config.messageColor.toColor()))
                 .append(buildMessageBodyComponent(rest, config.messageColor.toColor(), isMine))
-                .append(buildQuoteActionComponent(extractQuotePrefillTarget(nick, nick), detectSourceId(cmdBody)))
+                .append(buildQuoteActionComponent(extractQuotePrefillTarget(nick, nick), detectSourceId(cmdBody), rest))
         }
 
         return Component.empty()

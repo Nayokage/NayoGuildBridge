@@ -15,6 +15,11 @@ object ImsChatDisplay {
 
         if ((from == "discord" || from == "telegram" || from == "tg") && !cfg.imsBridgeReceiveEnabled) return
         if (combined && !cfg.imsCombinedBridgeEnabled) return
+        // Guild bot already injects [Discord]/[Telegram] lines into Guild Chat; overlay would duplicate.
+        if (
+            cfg.guildBridgeFormatEnabled &&
+            (from == "discord" || from == "telegram" || from == "tg" || from == "mc")
+        ) return
 
         val isShow = root.get("show")?.asString == "true"
         val fromPlayer = root.get("fromplayer")?.asString?.trim().orEmpty()
@@ -29,9 +34,7 @@ object ImsChatDisplay {
                 IncomingBridgeFormatter.fromPollText(msgText, "chat")
             else -> IncomingBridgeFormatter.fromWsJson(root, defaultTag)
         } ?: return
-        val dedupeKey = BridgeChatDedupe.keyFor(incoming.username, incoming.body)
-        if (BridgeChatDedupe.seenRecently(dedupeKey)) return
-        BridgeChatDedupe.remember(dedupeKey)
+        if (!BridgeChatDedupe.claimDisplay(incoming.username, incoming.body)) return
 
         val formatted = IncomingBridgeFormatter.format(incoming, defaultTag, defaultColor)
 
@@ -46,12 +49,12 @@ object ImsChatDisplay {
         for (key in response.keySet()) {
             total += response.getAsJsonArray(key).size()
         }
-        val sb = StringBuilder("§aОнлайн bridge: §e$total\n")
+        val sb = StringBuilder("§aОнлайн гильдий: §e$total\n")
         for (key in response.keySet()) {
             val arr = response.getAsJsonArray(key)
-            sb.append("§7$key§e: ${arr.size()}\n")
+            sb.append("§6").append(key).append(" §7(").append(arr.size()).append("):§f\n")
             if (arr.size() == 0) {
-                sb.append("§7—\n")
+                sb.append("  §7— нет игроков\n")
             } else {
                 for (i in 0 until arr.size()) {
                     if (i > 0) sb.append("§7, ")

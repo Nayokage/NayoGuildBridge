@@ -4,12 +4,25 @@ import com.nayoguildbridge.config.NgbConfig
 
 object GuildChatClassifier {
     private val STRIP_FMT = Regex("§.")
+    private val RANK = Regex("""\[([^\]]+)]""")
+    private val BRIDGE_RANK_NAMES = setOf("бридж", "bridge", "мост", "relay")
 
     fun hasBridgeRankOnLine(rawLine: String, speaker: String): Boolean {
         if (speaker.isBlank()) return false
         val line = STRIP_FMT.replace(rawLine, "")
-        return Regex("""(?i)${Regex.escape(speaker)}\s*\[(?:Бридж|Bridge)]\s*:""")
-            .containsMatchIn(line)
+        val colon = line.indexOf(':')
+        if (colon < 0) return false
+        val header = line.substring(0, colon)
+        val speakerInHeader = Regex(
+            """(?i)(?<![A-Za-z0-9_])${Regex.escape(speaker)}(?![A-Za-z0-9_])"""
+        ).containsMatchIn(header)
+        if (!speakerInHeader) return false
+        return RANK.findAll(header).any { isBridgeRankName(it.groupValues[1]) }
+    }
+
+    private fun isBridgeRankName(raw: String): Boolean {
+        val normalized = raw.trim().lowercase().replace(Regex("\\s+"), " ")
+        return normalized in BRIDGE_RANK_NAMES
     }
 
     fun looksLikeNestedRelayBody(body: String): Boolean {

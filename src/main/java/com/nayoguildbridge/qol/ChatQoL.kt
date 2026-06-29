@@ -43,21 +43,38 @@ object ChatQoL {
         """https?://(?:cdn|media)\.discordapp\.(?:com|net)/attachments/\S+""",
         RegexOption.IGNORE_CASE
     )
-    private val apiMediaRx = Regex(
-        """https?://(?:api\.fiokem\.cc|api\.2297211\.xyz)/api/media/([a-f0-9]{16})""",
-        RegexOption.IGNORE_CASE
-    )
     private val imagePlaceholder = Regex("""\(image\)\s*(https?://\S+)""", RegexOption.IGNORE_CASE)
     private val bareImagePlaceholder = Regex("""\(image\)""", RegexOption.IGNORE_CASE)
     private val imageToken = Regex("""(?:\(|\[|<)img:([a-f0-9]{16})(?:\)|\]|\>)""", RegexOption.IGNORE_CASE)
 
+    private fun mediaApiBases(): List<String> {
+        val bases = LinkedHashSet<String>()
+        BridgeEndpoints.httpBases().forEach { base ->
+            if (base.isNotBlank()) bases.add(base.trim().trimEnd('/'))
+        }
+        val custom = NgbConfig.config.platformApiUrl.trim().trimEnd('/')
+        if (custom.isNotBlank()) bases.add(custom)
+        return bases.toList()
+    }
+
     fun mediaUrlsForToken(token: String): List<String> =
-        BridgeEndpoints.httpBases().map { "$it/api/media/$token" }
+        mediaApiBases().map { "$it/api/media/$token" }
 
     fun mediaUrlForToken(token: String): String = mediaUrlsForToken(token).first()
 
-    fun mediaTokenFromApiUrl(url: String): String? =
-        apiMediaRx.find(url)?.groupValues?.getOrNull(1)
+    fun mediaTokenFromApiUrl(url: String): String? {
+        val clean = url.trim().substringBefore('?')
+        for (base in mediaApiBases()) {
+            val prefix = "$base/api/media/"
+            if (clean.startsWith(prefix, ignoreCase = true)) {
+                val id = clean.substring(prefix.length)
+                if (id.matches(Regex("[a-f0-9]{16}", RegexOption.IGNORE_CASE))) return id
+            }
+        }
+        return null
+    }
+
+    private fun isApiMediaUrl(url: String): Boolean = mediaTokenFromApiUrl(url) != null
 
     fun applyOutgoingBody(raw: String): String {
         var text = raw
@@ -82,8 +99,12 @@ object ChatQoL {
         imageToken.findAll(text).forEach { m ->
             mediaUrlsForToken(m.groupValues[1]).forEach { found.add(it) }
         }
-        apiMediaRx.findAll(text).forEach { m ->
-            found.add(m.value.trimEnd(',', '.', ')', ']', '}'))
+        mediaApiBases().forEach { base ->
+            Regex("""${Regex.escape(base)}/api/media/([a-f0-9]{16})""", RegexOption.IGNORE_CASE)
+                .findAll(text)
+                .forEach { m ->
+                    mediaUrlsForToken(m.groupValues[1]).forEach { found.add(it) }
+                }
         }
         imageUrlRx.findAll(text).forEach { found.add(it.value.trimEnd(',', '.', ')', ']', '}')) }
         discordCdnRx.findAll(text).forEach { found.add(it.value.trimEnd(',', '.', ')', ']', '}')) }
@@ -93,7 +114,7 @@ object ChatQoL {
     fun isImageUrl(url: String): Boolean {
         return imageUrlRx.containsMatchIn(url) ||
             discordCdnRx.containsMatchIn(url) ||
-            apiMediaRx.containsMatchIn(url)
+            isApiMediaUrl(url)
     }
 
     fun imageLinkComponent(url: String, mirrorUrls: List<String> = emptyList()): MutableComponent {
@@ -101,7 +122,7 @@ object ChatQoL {
         val allUrls = if (mirrorUrls.isNotEmpty()) mirrorUrls else listOf(clean)
         allUrls.forEach { ImagePreviewHandler.registerImageUrl(it) }
         val label = when {
-            apiMediaRx.containsMatchIn(clean) -> "фото"
+            isApiMediaUrl(clean) -> "фото"
             else -> clean.substringAfterLast('/').substringBefore('?').ifBlank { "image" }.take(24)
         }
         return Component.literal(" §7[🖼]")

@@ -93,6 +93,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                 is NayoGuildBridge.ChatTransform.Keep -> true
                 is NayoGuildBridge.ChatTransform.Hide -> false
                 is NayoGuildBridge.ChatTransform.Replace -> {
+                    // Game overlay messages are already replaced by MODIFY_GAME; chat packets need injection.
                     val client = Minecraft.getInstance()
                     client.execute {
                         client.gui.chat.addMessage(transform.component)

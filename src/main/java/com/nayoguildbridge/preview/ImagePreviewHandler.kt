@@ -50,12 +50,12 @@ object ImagePreviewHandler {
         val maxW = if (client.hasControlDown()) {
             client.window.guiScaledWidth - PADDING * 2 - 2
         } else {
-            280
+            minOf(420, client.window.guiScaledWidth - PADDING * 2 - 2)
         }
         val maxH = if (client.hasControlDown()) {
             client.window.guiScaledHeight - PADDING * 2 - 2
         } else {
-            200
+            minOf(320, client.window.guiScaledHeight - PADDING * 2 - 2)
         }
         preview.render(context, client, maxW.coerceAtLeast(1), maxH.coerceAtLeast(1))
     }

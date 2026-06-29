@@ -35,8 +35,12 @@ object ImsBridgeClient {
     @Volatile private var connectInProgress = false
     @Volatile private var lastStatusChatAt = 0L
     @Volatile private var connectedNoticeShown = false
+    @Volatile private var lastOnlineRequestAt = 0L
+    @Volatile private var cachedOnlineJson: JsonObject? = null
+    @Volatile private var pendingOnlineDisplay = false
 
     private const val STATUS_CHAT_COOLDOWN_MS = 60_000L
+    private const val ONLINE_REFRESH_MS = 45_000L
 
     private val wsEndpoints = BridgeEndpoints.wsEndpoints()
 
@@ -91,6 +95,10 @@ object ImsBridgeClient {
         if (!connected && now - lastConnectAttempt > delay) {
             lastConnectAttempt = now
             connectAsync()
+        }
+        if (connected && now - lastOnlineRequestAt > ONLINE_REFRESH_MS) {
+            lastOnlineRequestAt = now
+            requestOnlinePlayers(silent = true)
         }
     }
 
@@ -164,23 +172,34 @@ object ImsBridgeClient {
             addProperty("message_id", messageId)
             addProperty("msg", replyBody)
             addProperty("message", replyBody)
+            addProperty("body", replyBody)
+            addProperty("text", replyBody)
             addProperty("source", "minecraft")
             addProperty("source_mod", "nayoguildbridge-fabric")
             addProperty("quotedMessage", quotedMessageEffective)
+            addProperty("quotedText", quotedMessageEffective)
             addProperty("quotedFromUser", quotedFromUser)
+            addProperty("replyToUser", quotedFromUser)
             BridgeTextUtil.normalizeSourceTag(quote.quotedFromInstance)?.let {
                 addProperty("quotedFromInstance", it)
+                addProperty("quotedSource", it)
             }
             addProperty("timestamp", System.currentTimeMillis())
             if (!quote.replyToMessageId.isNullOrBlank()) {
                 addProperty("reply_to_message_id", quote.replyToMessageId)
+                addProperty("replyToMessageId", quote.replyToMessageId)
             }
         }
         ws?.send(payload.toString())
     }
 
-    fun requestOnlinePlayers() {
+    fun requestOnlinePlayers(silent: Boolean = false) {
         if (!connected || ws == null) return
+        if (!silent && cachedOnlineJson != null) {
+            ImsChatDisplay.showOnlinePlayers(cachedOnlineJson!!)
+            return
+        }
+        pendingOnlineDisplay = !silent
         ws?.send("""{"request":"getOnlinePlayers"}""")
     }
 
@@ -284,7 +303,16 @@ object ImsBridgeClient {
                         showInGame("§c$msg")
                     }
                     root.has("response") && root.get("request")?.asString == "getOnlinePlayers" -> {
-                        ImsChatDisplay.showOnlinePlayers(root.getAsJsonObject("response"))
+                        cachedOnlineJson = root.getAsJsonObject("response")
+                        if (pendingOnlineDisplay) {
+                            pendingOnlineDisplay = false
+                            ImsChatDisplay.showOnlinePlayers(cachedOnlineJson!!)
+                        }
+                    }
+                    root.get("from")?.asString == "server" &&
+                        root.get("type")?.asString == "online_update" &&
+                        root.has("response") -> {
+                        cachedOnlineJson = root.getAsJsonObject("response")
                     }
                     root.has("from") && root.has("msg") -> {
                         ImsChatDisplay.displayIncoming(root, guildTag, guildColor)

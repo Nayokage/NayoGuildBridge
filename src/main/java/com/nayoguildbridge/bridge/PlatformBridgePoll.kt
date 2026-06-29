@@ -28,10 +28,15 @@ object PlatformBridgePoll {
     }
 
     private val seenIds = ConcurrentHashMap.newKeySet<String>()
+    private val seenTextAt = ConcurrentHashMap<String, Long>()
     private const val SEEN_CAP = 200
+    private const val TEXT_DEDUPE_MS = 86_400_000L
 
     @Volatile
     private var lastPollAtMs = 0L
+
+    @Volatile
+    private var lastProcessedPollTs = 0L
 
     fun isActive(): Boolean {
         if (!com.nayoguildbridge.guard.EnvironmentGuard.isOperational()) return false
@@ -90,23 +95,43 @@ object PlatformBridgePoll {
                     for (el in items) {
                         if (!el.isJsonObject) continue
                         val obj = el.asJsonObject
+                        val text = obj.get("text")?.asString ?: continue
+
+                        val ts = run {
+                            val elTs = obj.get("ts") ?: return@run 0L
+                            if (!elTs.isJsonPrimitive || !elTs.asJsonPrimitive.isNumber) 0L
+                            else elTs.asLong
+                        }
+                        if (ts > 0 && ts <= lastProcessedPollTs) continue
+
+                        val textKey = text.trim().lowercase().replace(Regex("\\s+"), " ")
+                        if (textKey.isNotBlank()) {
+                            val now = System.currentTimeMillis()
+                            val prev = seenTextAt[textKey]
+                            if (prev != null && now - prev < TEXT_DEDUPE_MS) continue
+                        }
+
                         val id = obj.get("id")?.asString
                         if (!id.isNullOrBlank()) {
                             if (!seenIds.add(id)) continue
                             trimSeen()
                         } else {
-                            val text = obj.get("text")?.asString ?: continue
                             val dedupeKey = "${obj.get("ts")?.asString}:$text"
                             if (!seenIds.add(dedupeKey)) continue
                             trimSeen()
                         }
-                        val text = obj.get("text")?.asString ?: continue
+
                         val mode = obj.get("mode")?.asString ?: "chat"
                         val incoming = IncomingBridgeFormatter.fromPollText(text, mode) ?: continue
                         if (!cfg.bridgePollDisplayInChat) continue
-                        BridgeChatDedupe.remember(
-                            BridgeChatDedupe.keyFor(incoming.username, incoming.body)
-                        )
+                        if (!BridgeChatDedupe.claimDisplay(incoming.username, incoming.body)) continue
+
+                        if (textKey.isNotBlank()) {
+                            seenTextAt[textKey] = System.currentTimeMillis()
+                            trimTextSeen()
+                        }
+                        if (ts > lastProcessedPollTs) lastProcessedPollTs = ts
+
                         val formatted = IncomingBridgeFormatter.format(incoming, tag, color)
                         client.player?.displayClientMessage(formatted, false)
                     }
@@ -122,5 +147,11 @@ object PlatformBridgePoll {
             val drop = seenIds.take(seenIds.size - SEEN_CAP)
             drop.forEach { seenIds.remove(it) }
         }
+    }
+
+    private fun trimTextSeen() {
+        if (seenTextAt.size <= SEEN_CAP) return
+        val now = System.currentTimeMillis()
+        seenTextAt.entries.removeIf { now - it.value > TEXT_DEDUPE_MS }
     }
 }

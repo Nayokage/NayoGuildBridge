@@ -19,6 +19,7 @@ class BridgeOutboundFilterTest {
     fun detectsDiscordRelayPayload() {
         assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("[Discord] Nick: hello"))
         assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("[Minecraft] Nick: hello"))
+        assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("old text [Telegram] Nick: hello"))
     }
 
     @Test
@@ -34,8 +35,38 @@ class BridgeOutboundFilterTest {
     }
 
     @Test
+    fun allowsRussianRanksAroundPlayerName() {
+        val line = "Guild > [Главный Модератор] WaterSpais [СТРАНЫ СНГ]: обычное сообщение"
+        assertTrue(BridgeOutboundFilter.shouldForwardGuildLine(line))
+    }
+
+    @Test
     fun rejectsRelayBodyOnPlayerLine() {
         val line = "Guild > WaterSpais: [Minecraft] echo"
+        assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
+    }
+
+    @Test
+    fun rejectsRenderedBridgeLineWithSourceBeforeNick() {
+        val line = "Guild > [Minecraft] UnsmaiCreature [BR]: daily bridge summary"
+        assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
+    }
+
+    @Test
+    fun rejectsJoinedBridgeHistoryBlock() {
+        val line = "Guild > WaterSpais: норм но копирует че так дофига [Telegram] Y3M112: мне все уши прожужали"
+        assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
+    }
+
+    @Test
+    fun rejectsColorizedBridgeRank() {
+        val line = "Guild > SomeBot §b[§3Б§bр§3и§bд§3ж§b]: Nayokage: hello"
+        assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
+    }
+
+    @Test
+    fun rejectsRussianBridgeRankAlias() {
+        val line = "Guild > SomeBot [Мост]: [Telegram] User: hello"
         assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
     }
 }

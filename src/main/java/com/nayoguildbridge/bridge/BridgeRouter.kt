@@ -35,8 +35,7 @@ object BridgeRouter {
     }
 
     fun sendCombined(text: String) {
-        val cfg = NgbConfig.config
-        if (cfg.imsBridgeEnabled && ImsBridgeClient.isConnected()) {
+        if (ImsBridgeClient.isConnected()) {
             ImsBridgeClient.sendCombinedMessage(text)
             return
         }
@@ -47,8 +46,7 @@ object BridgeRouter {
     }
 
     fun sendBridgeChat(text: String) {
-        val cfg = NgbConfig.config
-        if (cfg.imsBridgeEnabled && ImsBridgeClient.isConnected()) {
+        if (ImsBridgeClient.isConnected()) {
             ImsBridgeClient.sendGuildMessage(text)
         } else {
             BridgeHttpIngest.enqueueGuildLine(toGuildLineForIngest(text))
@@ -56,8 +54,7 @@ object BridgeRouter {
     }
 
     fun sendWebOnlyRelay(text: String) {
-        val cfg = NgbConfig.config
-        if (cfg.imsBridgeEnabled && ImsBridgeClient.isConnected()) {
+        if (ImsBridgeClient.isConnected()) {
             ImsBridgeClient.sendWebOnlyRelay(text)
         } else {
             BridgeHttpIngest.enqueueGuildLine(toGuildLineForIngest(text))

@@ -11,7 +11,7 @@ data class Config(
     var quoteSystemEnabled: Boolean = true,
     var quoteApiUrl: String = "",
     var quoteApiUrlBackup: String = "",
-    var hideBotName: Boolean = false,
+    var hideBotName: Boolean = true,
     var remoteBridgeEnabled: Boolean = false,
     var remoteBridgeSendQuotes: Boolean = true,
     var remoteBridgeUrl: String = "",

@@ -53,18 +53,25 @@ object ApiClient {
             addProperty("originInstance", PlayerIdentity.originInstance(client))
             addProperty("username", player.name.string)
             addProperty("message", replyBody)
+            addProperty("body", replyBody)
+            addProperty("text", replyBody)
+            addProperty("msg", replyBody)
             addProperty("quoted", true)
             addProperty("timestamp", System.currentTimeMillis())
             addProperty("quotedMessage", quotedMessageEffective)
+            addProperty("quotedText", quotedMessageEffective)
             PlayerIdentity.playerUuid(client)?.let { addProperty("minecraftUuid", it) }
             if (quotedFromInstanceEffective != null) {
                 addProperty("quotedFromInstance", quotedFromInstanceEffective)
+                addProperty("quotedSource", quotedFromInstanceEffective)
             }
             if (quotedFromUserEffective != null) {
                 addProperty("quotedFromUser", quotedFromUserEffective)
+                addProperty("replyToUser", quotedFromUserEffective)
             }
             if (!quote.replyToMessageId.isNullOrBlank()) {
                 addProperty("reply_to_message_id", quote.replyToMessageId)
+                addProperty("replyToMessageId", quote.replyToMessageId)
             }
         }
 

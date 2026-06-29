@@ -63,7 +63,8 @@ class ImagePreview(private val urls: List<String>) {
             return
         }
 
-        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1f)
+        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+        if (scale <= 0f) scale = 1f
         val scaledW = (width * scale).toInt().coerceAtLeast(1)
         val scaledH = (height * scale).toInt().coerceAtLeast(1)
 

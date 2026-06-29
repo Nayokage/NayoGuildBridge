@@ -10,6 +10,14 @@ object QuoteDetector {
         val replyToMessageId: String? = null
     )
 
+    data class IncomingQuote(
+        val quotedText: String,
+        val replyText: String,
+        val quotedFromInstance: String? = null,
+        val quotedFromUser: String? = null,
+        val replyToMessageId: String? = null
+    )
+
     fun detect(rawMessage: String): Result {
         val msg = rawMessage.trimStart()
         val withoutPrefix = when {
@@ -86,24 +94,55 @@ object QuoteDetector {
         )
     }
 
-    fun parseIncomingQuoteBody(text: String): Pair<String, String>? {
+    fun parseIncomingQuoteBody(text: String): Pair<String, String>? =
+        parseIncomingQuote(text)?.let { it.quotedText to it.replyText }
+
+    fun cleanIncomingQuoteText(text: String): String =
+        cleanIncomingMessageLine(text)
+
+    fun parseIncomingQuote(text: String): IncomingQuote? {
         val pipe = text.indexOf(" | ")
         if (pipe > 0) {
             val left = text.substring(0, pipe).trim()
             val right = text.substring(pipe + 3).trim()
             if (left.startsWith(">") && left.length > 1 && right.isNotEmpty()) {
-                return left.removePrefix(">").trimStart() to right
+                val parsed = parseQuotedLine(left.removePrefix(">").trimStart())
+                val quotedText = parsed.third?.takeIf { it.isNotBlank() }
+                    ?: left.removePrefix(">").trimStart()
+                val replyText = cleanIncomingMessageLine(right)
+                if (quotedText.isBlank() || replyText.isBlank()) return null
+                return IncomingQuote(
+                    quotedText = quotedText,
+                    replyText = replyText,
+                    quotedFromInstance = parsed.first,
+                    quotedFromUser = parsed.second,
+                    replyToMessageId = parsed.fourth
+                )
             }
         }
         val lines = text.split('\n').map { it.trimEnd() }.filter { it.isNotBlank() }
         if (lines.size < 2) return null
         val quoteLineRaw = lines.first()
         if (!quoteLineRaw.trimStart().startsWith(">")) return null
-        val quoteText = quoteLineRaw.trimStart().removePrefix(">").trimStart()
+        val quoteRaw = quoteLineRaw.trimStart().removePrefix(">").trimStart()
+        val parsed = parseQuotedLine(quoteRaw)
+        val quoteText = parsed.third?.takeIf { it.isNotBlank() } ?: quoteRaw
         if (quoteText.isEmpty()) return null
-        val replyText = lines.drop(1).joinToString(" ").trim()
+        val replyText = cleanIncomingMessageLine(lines.drop(1).joinToString(" ").trim())
         if (replyText.isEmpty()) return null
-        return quoteText to replyText
+        return IncomingQuote(
+            quotedText = quoteText,
+            replyText = replyText,
+            quotedFromInstance = parsed.first,
+            quotedFromUser = parsed.second,
+            replyToMessageId = parsed.fourth
+        )
+    }
+
+    private fun cleanIncomingMessageLine(line: String): String {
+        val cleaned = line.trim().removePrefix(">").trimStart()
+        val parsed = parseQuotedLine(cleaned)
+        return parsed.third?.takeIf { it.isNotBlank() } ?: cleaned
     }
 
     private fun parseSingleLineWithPipe(line: String): Result? {
