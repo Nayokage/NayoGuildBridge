@@ -7,7 +7,7 @@ import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
-import net.minecraft.util.Util
+import net.minecraft.Util
 import java.net.URI
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -94,7 +94,7 @@ class ImagePreviewScreen(
         )
         addRenderableWidget(
             Button.builder(Component.literal("Закрыть")) {
-                minecraft.setScreen(parent)
+                Minecraft.getInstance().setScreen(parent)
             }.bounds(left + btnW + gap, top, btnW, 20).build()
         )
     }
@@ -115,13 +115,14 @@ class ImagePreviewScreen(
             return
         }
 
-        preview.load(minecraft)
+        val client = Minecraft.getInstance()
+        preview.load(client)
         val maxW = (width * 0.86).toInt().coerceAtLeast(64)
         val maxH = (height * 0.68).toInt().coerceAtLeast(64)
         val (scaledW, scaledH) = preview.scaledSize(maxW, maxH)
         val x = (width - scaledW) / 2
         val y = 28 + ((height - 28 - 48 - scaledH) / 2).coerceAtLeast(8)
-        preview.renderAt(guiGraphics, minecraft, x, y, maxW, maxH)
+        preview.renderAt(guiGraphics, client, x, y, maxW, maxH)
 
         if (preview.isReady()) {
             guiGraphics.drawCenteredString(font, "Esc — закрыть", width / 2, height - 52, 0x888888)
@@ -133,6 +134,6 @@ class ImagePreviewScreen(
     override fun isPauseScreen(): Boolean = false
 
     override fun onClose() {
-        minecraft.setScreen(parent)
+        Minecraft.getInstance().setScreen(parent)
     }
 }

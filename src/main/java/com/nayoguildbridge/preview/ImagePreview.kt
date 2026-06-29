@@ -57,10 +57,6 @@ class ImagePreview(private val urls: List<String>) {
         }
     }
 
-    fun render(context: GuiGraphics, client: Minecraft, maxWidth: Int, maxHeight: Int) {
-        renderAt(context, client, ImagePreviewHandler.PADDING + 1, ImagePreviewHandler.PADDING + 1, maxWidth, maxHeight)
-    }
-
     fun renderAt(
         context: GuiGraphics,
         client: Minecraft,
