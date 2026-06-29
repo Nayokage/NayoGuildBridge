@@ -46,20 +46,20 @@ class GuildChatClassifierTest {
 
     @Test
     fun discordMarkerFormats() {
-        val line = "Guild > oSeptember11 [Бридж]: [Discord] Nayokage: hi"
-        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "[Discord] Nayokage: hi"))
+        val line = "Guild > oSeptember11 [Бридж]: [Dis] Nayokage: hi"
+        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "[Dis] Nayokage: hi"))
     }
 
     @Test
     fun listedBotFormatsRelay() {
-        val line = "Guild > Electoral_Goon [Бридж]: [Discord] User: test"
-        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "Electoral_Goon", "[Discord] User: test"))
+        val line = "Guild > Electoral_Goon [Бридж]: [Dis] User: test"
+        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "Electoral_Goon", "[Dis] User: test"))
     }
 
     @Test
     fun playerChatRelayWithoutGuildPrefix() {
-        val line = "[Discord] Nayokage: hi"
-        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "[Discord] Nayokage: hi"))
+        val line = "[Dis] Nayokage: hi"
+        assertTrue(GuildChatClassifier.shouldApplyBridgeFormat(line, "oSeptember11", "[Dis] Nayokage: hi"))
     }
 
     @Test

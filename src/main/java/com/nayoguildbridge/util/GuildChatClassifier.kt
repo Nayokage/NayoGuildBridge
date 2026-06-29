@@ -42,20 +42,9 @@ object GuildChatClassifier {
         if (s.isEmpty()) return false
 
         if (BridgeOutboundFilter.isBridgeRelayPayload(s)) return true
+        if (BridgeSourceTags.looksLikeBridgedPayloadStart(s)) return true
 
-        val cfg = NgbConfig.config
-        if (cfg.telegramMarker.isNotEmpty() && s.startsWith(cfg.telegramMarker)) return true
-        if (cfg.minecraftMarker.isNotEmpty() && s.startsWith(cfg.minecraftMarker)) return true
-        if (s.startsWith("[DC]", ignoreCase = true) || s.startsWith("[DC] ", ignoreCase = true)) return true
-
-        val tgLabel = cfg.telegramLabel.trimStart()
-        val dcLabel = cfg.discordLabel.trimStart()
-        val mcLabel = cfg.minecraftLabel.trimStart()
-        if (tgLabel.isNotEmpty() && s.startsWith(tgLabel)) return true
-        if (dcLabel.isNotEmpty() && s.startsWith(dcLabel)) return true
-        if (mcLabel.isNotEmpty() && s.startsWith(mcLabel)) return true
-
-        val botListConfigured = cfg.bridgeBotNames.any { it.isNotBlank() }
+        val botListConfigured = NgbConfig.config.bridgeBotNames.any { it.isNotBlank() }
         if (botListConfigured && !speakerIsBridgeBot) return false
 
         val idx = s.indexOf(':')

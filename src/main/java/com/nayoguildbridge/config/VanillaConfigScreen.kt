@@ -19,15 +19,11 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
     private var senderNickLegacyCodes = NgbConfig.config.senderNickLegacyCodes
     private var senderNickStyleOnlyMine = NgbConfig.config.senderNickStyleOnlyMine
     private var myNickAliases = NgbConfig.config.myNickAliases.joinToString(", ")
-    private var telegramMarker = NgbConfig.config.telegramMarker
-    private var minecraftMarker = NgbConfig.config.minecraftMarker
     private var wordHighlightEnabled = NgbConfig.config.wordHighlightEnabled
     private var wordHighlightRules = NgbConfig.config.wordHighlightRules
     private var wordHighlightOnlyMine = NgbConfig.config.wordHighlightOnlyMine
 
     private lateinit var blockListBox: EditBox
-    private lateinit var tgMarkerBox: EditBox
-    private lateinit var mcMarkerBox: EditBox
     private lateinit var legacyCodesBox: EditBox
     private lateinit var wordRulesBox: EditBox
     private lateinit var myAliasesBox: EditBox
@@ -141,15 +137,6 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
         addRenderableWidget(wordRulesBox)
         y += gap
 
-        val markerW = (w - 6) / 2
-        tgMarkerBox = EditBox(font, centerX - w / 2, y, markerW, h, Component.literal("TG marker"))
-        tgMarkerBox.value = telegramMarker
-        addRenderableWidget(tgMarkerBox)
-        mcMarkerBox = EditBox(font, centerX - w / 2 + markerW + 6, y, markerW, h, Component.literal("MC marker"))
-        mcMarkerBox.value = minecraftMarker
-        addRenderableWidget(mcMarkerBox)
-        y += gap
-
         addRenderableWidget(
             Button.builder(Component.literal("Done")) {
                 applyAndSave()
@@ -196,8 +183,6 @@ class VanillaConfigScreen(private val parent: Screen?) : Screen(Component.litera
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
-        cfg.telegramMarker = tgMarkerBox.value.trim().ifEmpty { "[TG]" }
-        cfg.minecraftMarker = mcMarkerBox.value.ifEmpty { "." }
         cfg.wordHighlightEnabled = wordHighlightEnabled
         cfg.wordHighlightRules = wordRulesBox.value
         cfg.wordHighlightOnlyMine = wordHighlightOnlyMine

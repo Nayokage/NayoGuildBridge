@@ -9,11 +9,11 @@ object BridgeOutboundFilter {
         RegexOption.IGNORE_CASE
     )
     private val SOURCE_TAG_AT_START = Regex(
-        """^\[(?:Discord|Telegram|Minecraft|TG|DS|DC|MC|discord|telegram|minecraft)]\s""",
+        """^\[(?:${BridgeSourceTags.BRACKET_TAG_PATTERN})]\s""",
         RegexOption.IGNORE_CASE
     )
     private val SOURCE_LINE_FRAGMENT = Regex(
-        """\[(?:Discord|Telegram|Minecraft|TG|DS|DC|MC)]\s+[^:\n]{1,96}:\s*""",
+        """\[(?:${BridgeSourceTags.BRACKET_TAG_PATTERN})]\s+[^:\n]{1,96}:\s*""",
         RegexOption.IGNORE_CASE
     )
     private val ARROW_REPLY = Regex("""^\.?[^→>]{1,64}[→>]\s*[^:]{1,64}:\s""")

@@ -228,7 +228,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                                     "§7${com.nayoguildbridge.config.BridgeEndpoints.statusLine()}\n" +
                                     "§7${ImsBridgeClient.statusLine()} §7| ${BridgeHealthCache.statusSuffix()}\n" +
                                     "§7Discord→MC: overlay WS. DS/TG fanout: §fbr1dgebtw§7 (§fdiscordBot:false§7 = норма).\n" +
-                                    "§7Цитаты: §f> [Discord] Nick: | ответ§7 или клик §f[q]§7. CB send: §f/cbridge chat"
+                                    "§7Цитаты: §f> [Dis] Nick: | ответ§7 или клик §f[q]§7. CB send: §f/cbridge chat"
                             )
                         )
                         1
@@ -322,6 +322,19 @@ object NayoGuildBridgeClient : ClientModInitializer {
             dispatcher.register(ClientCommandManager.literal("bridgemenu").executes { openConfigFromCommand(it.source) })
             dispatcher.register(ClientCommandManager.literal("ngbonline").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
             dispatcher.register(ClientCommandManager.literal("bl").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
+
+            dispatcher.register(
+                ClientCommandManager.literal("ngbimage")
+                    .then(
+                        ClientCommandManager.literal("open")
+                            .then(
+                                ClientCommandManager.argument("token", StringArgumentType.word()).executes { ctx ->
+                                    ImagePreviewHandler.openPreview(StringArgumentType.getString(ctx, "token"))
+                                    1
+                                }
+                            )
+                    )
+            )
 
             dispatcher.register(
                 ClientCommandManager.literal("bc")

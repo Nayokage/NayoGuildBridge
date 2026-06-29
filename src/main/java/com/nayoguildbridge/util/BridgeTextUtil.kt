@@ -1,7 +1,10 @@
 package com.nayoguildbridge.util
 
 object BridgeTextUtil {
-    private val sourceLine = Regex("""^\[(?:Discord|Telegram|Minecraft|TG|DS|MC|discord|telegram|minecraft)]\s+([^:]{1,64}):\s*(.+)$""", RegexOption.IGNORE_CASE)
+    private val sourceLine = Regex(
+        """^\[(?:${BridgeSourceTags.BRACKET_TAG_PATTERN})]\s+([^:]{1,64}):\s*(.+)$""",
+        RegexOption.IGNORE_CASE
+    )
     private val bracketNick = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""")
     private val trailingQ = Regex("""\s*\[q]\s*$""", RegexOption.IGNORE_CASE)
 
@@ -9,7 +12,7 @@ object BridgeTextUtil {
         if (raw.isNullOrBlank()) return null
         return when (raw.trim().lowercase()) {
             "tg", "telegram" -> "Telegram"
-            "ds", "discord" -> "Discord"
+            "ds", "discord", "dis" -> "Dis"
             "mc", "minecraft" -> "Minecraft"
             else -> raw.trim().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
         }

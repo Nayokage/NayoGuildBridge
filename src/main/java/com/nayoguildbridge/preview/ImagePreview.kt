@@ -1,7 +1,7 @@
 package com.nayoguildbridge.preview
 
-import com.nayoguildbridge.NayoGuildBridge
 import com.mojang.blaze3d.platform.NativeImage
+import com.nayoguildbridge.NayoGuildBridge
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.renderer.RenderPipelines
@@ -25,6 +25,10 @@ class ImagePreview(private val urls: List<String>) {
     @Volatile private var failureReason = "Не удалось загрузить изображение"
     @Volatile private var width = 0
     @Volatile private var height = 0
+
+    fun isReady(): Boolean = width > 0 && height > 0
+    fun isFailed(): Boolean = failed
+    fun failureMessage(): String = failureReason
 
     fun load(client: Minecraft) {
         if (loading || failed || width > 0) return
@@ -54,28 +58,35 @@ class ImagePreview(private val urls: List<String>) {
     }
 
     fun render(context: GuiGraphics, client: Minecraft, maxWidth: Int, maxHeight: Int) {
+        renderAt(context, client, ImagePreviewHandler.PADDING + 1, ImagePreviewHandler.PADDING + 1, maxWidth, maxHeight)
+    }
+
+    fun renderAt(
+        context: GuiGraphics,
+        client: Minecraft,
+        x: Int,
+        y: Int,
+        maxWidth: Int,
+        maxHeight: Int
+    ) {
         if (failed) {
-            drawMessage(context, client, failureReason)
+            drawMessageAt(context, client, failureReason, x, y)
             return
         }
         if (width <= 0 || height <= 0) {
-            drawMessage(context, client, "Загрузка изображения...")
+            drawMessageAt(context, client, "Загрузка изображения...", x, y)
             return
         }
 
-        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
-        if (scale <= 0f) scale = 1f
-        val scaledW = (width * scale).toInt().coerceAtLeast(1)
-        val scaledH = (height * scale).toInt().coerceAtLeast(1)
-
-        val x = ImagePreviewHandler.PADDING + 1
-        val y = ImagePreviewHandler.PADDING + 1
+        val (scaledW, scaledH) = scaledSize(maxWidth, maxHeight)
+        val frameLeft = x - 1
+        val frameTop = y - 1
         context.fill(
-            ImagePreviewHandler.PADDING,
-            ImagePreviewHandler.PADDING,
-            ImagePreviewHandler.PADDING + scaledW + 2,
-            ImagePreviewHandler.PADDING + scaledH + 2,
-            0xCC000000.toInt()
+            frameLeft,
+            frameTop,
+            frameLeft + scaledW + 2,
+            frameTop + scaledH + 2,
+            0xE6000000.toInt()
         )
         context.blit(
             RenderPipelines.GUI_TEXTURED,
@@ -87,9 +98,19 @@ class ImagePreview(private val urls: List<String>) {
         )
     }
 
-    private fun drawMessage(context: GuiGraphics, client: Minecraft, text: String) {
-        context.fill(4, 4, 220, 18, 0xCC000000.toInt())
-        context.drawString(client.font, text, 8, 8, 0xFFFFFF)
+    fun scaledSize(maxWidth: Int, maxHeight: Int): Pair<Int, Int> {
+        if (width <= 0 || height <= 0) return 1 to 1
+        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+        if (scale <= 0f) scale = 1f
+        val scaledW = (width * scale).toInt().coerceAtLeast(1)
+        val scaledH = (height * scale).toInt().coerceAtLeast(1)
+        return scaledW to scaledH
+    }
+
+    private fun drawMessageAt(context: GuiGraphics, client: Minecraft, text: String, x: Int, y: Int) {
+        val w = client.font.width(text) + 12
+        context.fill(x - 4, y - 4, x + w, y + client.font.lineHeight + 6, 0xE6000000.toInt())
+        context.drawString(client.font, text, x, y, 0xFFFFFF)
     }
 
     private fun download(imageUrl: String): ByteArray? {

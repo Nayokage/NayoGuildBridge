@@ -121,28 +121,35 @@ object ChatQoL {
         val clean = url.trim()
         val allUrls = if (mirrorUrls.isNotEmpty()) mirrorUrls else listOf(clean)
         allUrls.forEach { ImagePreviewHandler.registerImageUrl(it) }
+        val token = ImagePreviewHandler.registerPreviewUrls(allUrls)
         val label = when {
             isApiMediaUrl(clean) -> "фото"
             else -> clean.substringAfterLast('/').substringBefore('?').ifBlank { "image" }.take(24)
         }
-        return Component.literal(" §7[🖼]")
-            .append(
-                Component.literal(" $label")
-                    .withStyle(
-                        Style.EMPTY
-                            .withUnderlined(true)
-                            .withColor(0xFF88FF)
-                            .withClickEvent(ClickEvent.OpenUrl(URI.create(clean)))
-                            .withInsertion(ImagePreviewHandler.IMAGE_PREVIEW_INSERTION + clean)
-                            .withHoverEvent(
-                                HoverEvent.ShowText(
-                                    Component.literal(
-                                        "§7Скриншот / изображение\n§7Наведите — превью в игре\n§7Клик — открыть"
-                                    )
-                                )
-                            )
+        val clickStyle = if (NgbConfig.config.imagePreviewEnabled && token.isNotBlank()) {
+            Style.EMPTY
+                .withUnderlined(true)
+                .withColor(0xFF88FF)
+                .withClickEvent(ClickEvent.RunCommand(ImagePreviewHandler.previewCommand(token)))
+                .withInsertion(ImagePreviewHandler.IMAGE_PREVIEW_INSERTION + clean)
+                .withHoverEvent(
+                    HoverEvent.ShowText(
+                        Component.literal(
+                            "§7Скриншот / изображение\n§7Клик — открыть в окне\n§7В окне можно открыть сайт"
+                        )
                     )
-            )
+                )
+        } else {
+            Style.EMPTY
+                .withUnderlined(true)
+                .withColor(0xFF88FF)
+                .withClickEvent(ClickEvent.OpenUrl(URI.create(clean)))
+                .withHoverEvent(
+                    HoverEvent.ShowText(Component.literal("§7Открыть изображение в браузере"))
+                )
+        }
+        return Component.literal(" §7[🖼]")
+            .append(Component.literal(" $label").withStyle(clickStyle))
     }
 
     fun imageTokenComponent(token: String): MutableComponent {

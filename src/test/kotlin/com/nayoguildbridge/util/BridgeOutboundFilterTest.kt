@@ -17,6 +17,7 @@ class BridgeOutboundFilterTest {
 
     @Test
     fun detectsDiscordRelayPayload() {
+        assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("[Dis] Nick: hello"))
         assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("[Discord] Nick: hello"))
         assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("[Minecraft] Nick: hello"))
         assertTrue(BridgeOutboundFilter.isBridgeRelayPayload("old text [Telegram] Nick: hello"))
@@ -24,7 +25,7 @@ class BridgeOutboundFilterTest {
 
     @Test
     fun rejectsBridgeBotGuildLine() {
-        val line = "Guild > Electoral_Goon [Бридж]: [Discord] WaterSpais: test"
+        val line = "Guild > Electoral_Goon [Бридж]: [Dis] WaterSpais: test"
         assertFalse(BridgeOutboundFilter.shouldForwardGuildLine(line))
     }
 

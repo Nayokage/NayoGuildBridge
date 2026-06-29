@@ -5,6 +5,7 @@ import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.config.NgbConfig.config
 import com.nayoguildbridge.quote.QuoteDetector
 import com.nayoguildbridge.quote.QuoteDisplay
+import com.nayoguildbridge.util.BridgeSourceTags
 import com.nayoguildbridge.util.BridgeTextUtil
 import com.nayoguildbridge.util.GuildChatClassifier
 import com.nayoguildbridge.qol.ChatQoL
@@ -230,40 +231,29 @@ object NayoGuildBridge : ModInitializer {
 
     private fun parseBracketSourceLine(raw: String): BracketSource? {
         val s = raw.trimStart()
-        if (config.minecraftMarker.isNotEmpty() && s.startsWith(config.minecraftMarker)) {
-            val rest = s.removePrefix(config.minecraftMarker).trimStart()
+        if (s.startsWith(BridgeSourceTags.MINECRAFT_MARKER)) {
+            val rest = s.removePrefix(BridgeSourceTags.MINECRAFT_MARKER).trimStart()
             val dot = Regex("""^([^:→>]{1,64})(?:[→>]([^:]{1,64}))?\s*:\s*(.+)$""").find(rest) ?: return null
             return BracketSource("minecraft", dot.groupValues[1].trim(), dot.groupValues[3].trim())
         }
         val m = BRACKET_SOURCE.matcher(s)
         if (!m.matches()) return null
-        val sourceRaw = m.group(1).trim()
+        val sourceId = BridgeSourceTags.normalizeSourceId(m.group(1).trim())
         val nick = m.group(2).trim()
         val body = m.group(3).trim()
-        val sourceId = when (sourceRaw.lowercase()) {
-            "telegram", "tg" -> "telegram"
-            "minecraft", "mc" -> "minecraft"
-            "discord", "ds", "dc" -> "discord"
-            else -> sourceRaw.trim()
-        }
         return BracketSource(sourceId, nick, body)
     }
 
-    private fun isDiscordSource(sourceId: String): Boolean {
-        return when (sourceId.lowercase()) {
-            "discord", "ds", "dc" -> true
-            else -> false
-        }
-    }
+    private fun isDiscordSource(sourceId: String): Boolean = BridgeSourceTags.isDiscordSource(sourceId)
 
     private fun buildSourceLabelForId(sourceId: String): Component {
         val lower = sourceId.lowercase()
         val (label, colorHex) = when {
-            lower == "telegram" || lower == "tg" -> config.telegramLabel to config.telegramLabelColor
-            lower == "minecraft" || lower == "mc" -> config.minecraftLabel to config.minecraftLabelColor
-            isDiscordSource(sourceId) -> config.discordLabel to config.discordLabelColor
+            lower == "telegram" || lower == "tg" -> BridgeSourceTags.TELEGRAM_DISPLAY to config.telegramLabelColor
+            lower == "minecraft" || lower == "mc" -> BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
+            isDiscordSource(sourceId) -> BridgeSourceTags.DISCORD_DISPLAY to config.discordLabelColor
             sourceId.isNotBlank() -> "[$sourceId] " to config.minecraftLabelColor
-            else -> config.minecraftLabel to config.minecraftLabelColor
+            else -> BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
         }
         return Component.literal(label)
             .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(colorHex))))
@@ -332,7 +322,7 @@ object NayoGuildBridge : ModInitializer {
             .append(senderComponent)
             .append(Component.literal(": ").withColor(config.messageColor.toColor()))
             .append(
-                QuoteDisplay.buildInlineQuoteReply(quoteBody, replyBody) { reply ->
+                QuoteDisplay.buildInlineQuoteReply(quoteBody, replyBody, quotedUser, quotedSource) { reply ->
                     buildMessageWithWordHighlights(reply, config.messageColor.toColor(), isMyNick(replyUser))
                 }
             )
@@ -407,55 +397,38 @@ object NayoGuildBridge : ModInitializer {
     }
 
     private fun buildSourcePrefixAndStrip(raw: String): Pair<Component, String> {
-        val tgMarker = config.telegramMarker
-        val mcMarker = config.minecraftMarker
-        val tgLabel = config.telegramLabel.trimStart()
-        val dcLabel = config.discordLabel.trimStart()
-        val mcLabel = config.minecraftLabel.trimStart()
-
         var body = raw
         val (labelText, labelColor) = when {
-            tgMarker.isNotEmpty() && body.startsWith(tgMarker) -> {
-                body = body.removePrefix(tgMarker).trimStart()
-                config.telegramLabel to config.telegramLabelColor
+            body.startsWith(BridgeSourceTags.TELEGRAM_MARKER) -> {
+                body = body.removePrefix(BridgeSourceTags.TELEGRAM_MARKER).trimStart()
+                BridgeSourceTags.TELEGRAM_DISPLAY to config.telegramLabelColor
             }
-            mcMarker.isNotEmpty() && body.startsWith(mcMarker) -> {
-                body = body.removePrefix(mcMarker).trimStart()
-                config.minecraftLabel to config.minecraftLabelColor
+            body.startsWith(BridgeSourceTags.MINECRAFT_MARKER) -> {
+                body = body.removePrefix(BridgeSourceTags.MINECRAFT_MARKER).trimStart()
+                BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
             }
-            tgLabel.isNotEmpty() && body.startsWith(tgLabel) -> {
-                body = body.removePrefix(tgLabel).trimStart()
-                config.telegramLabel to config.telegramLabelColor
+            body.startsWith(BridgeSourceTags.TELEGRAM_DISPLAY.trimStart()) -> {
+                body = body.removePrefix(BridgeSourceTags.TELEGRAM_DISPLAY.trimStart()).trimStart()
+                BridgeSourceTags.TELEGRAM_DISPLAY to config.telegramLabelColor
             }
-            mcLabel.isNotEmpty() && body.startsWith(mcLabel) -> {
-                body = body.removePrefix(mcLabel).trimStart()
-                config.minecraftLabel to config.minecraftLabelColor
+            body.startsWith(BridgeSourceTags.MINECRAFT_DISPLAY.trimStart()) -> {
+                body = body.removePrefix(BridgeSourceTags.MINECRAFT_DISPLAY.trimStart()).trimStart()
+                BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
             }
-            dcLabel.isNotEmpty() && body.startsWith(dcLabel) -> {
-                body = body.removePrefix(dcLabel).trimStart()
-                config.discordLabel to config.discordLabelColor
+            body.startsWith(BridgeSourceTags.DISCORD_DISPLAY.trimEnd()) -> {
+                body = body.removePrefix(BridgeSourceTags.DISCORD_DISPLAY.trimEnd()).trimStart()
+                BridgeSourceTags.DISCORD_DISPLAY to config.discordLabelColor
             }
             body.startsWith("[DC]", ignoreCase = true) -> {
                 body = body.removePrefix("[DC]").trimStart()
-                config.discordLabel to config.discordLabelColor
+                BridgeSourceTags.DISCORD_DISPLAY to config.discordLabelColor
             }
             else -> {
                 val bracket = BRACKET_SOURCE.matcher(body)
                 if (bracket.matches()) {
-                    val sourceRaw = bracket.group(1).trim().lowercase()
-                    val labelPair = when {
-                        sourceRaw == "telegram" || sourceRaw == "tg" ->
-                            config.telegramLabel to config.telegramLabelColor
-                        sourceRaw == "minecraft" || sourceRaw == "mc" ->
-                            config.minecraftLabel to config.minecraftLabelColor
-                        sourceRaw == "discord" || sourceRaw == "ds" || sourceRaw == "dc" ->
-                            config.discordLabel to config.discordLabelColor
-                        else -> "[${bracket.group(1).trim()}] " to config.minecraftLabelColor
-                    }
+                    val sourceId = BridgeSourceTags.normalizeSourceId(bracket.group(1).trim())
                     body = bracket.group(3).trim()
-                    val label = Component.literal(labelPair.first)
-                        .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(labelPair.second))))
-                    return label to body
+                    return buildSourceLabelForId(sourceId) to body
                 }
                 return Component.empty() to body
             }
@@ -463,31 +436,22 @@ object NayoGuildBridge : ModInitializer {
 
         val label = Component.literal(labelText)
             .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(labelColor))))
-
         return label to body
     }
 
     private fun detectSourceId(rawBody: String): String {
         val body = rawBody.trimStart()
-        val tgLabel = config.telegramLabel.trimStart()
-        val dcLabel = config.discordLabel.trimStart()
-        val mcLabel = config.minecraftLabel.trimStart()
         return when {
-            config.telegramMarker.isNotEmpty() && body.startsWith(config.telegramMarker) -> "telegram"
-            config.minecraftMarker.isNotEmpty() && body.startsWith(config.minecraftMarker) -> "minecraft"
-            tgLabel.isNotEmpty() && body.startsWith(tgLabel) -> "telegram"
-            mcLabel.isNotEmpty() && body.startsWith(mcLabel) -> "minecraft"
-            dcLabel.isNotEmpty() && body.startsWith(dcLabel) -> "discord"
+            body.startsWith(BridgeSourceTags.TELEGRAM_MARKER) -> "telegram"
+            body.startsWith(BridgeSourceTags.MINECRAFT_MARKER) -> "minecraft"
+            body.startsWith(BridgeSourceTags.TELEGRAM_DISPLAY.trimStart()) -> "telegram"
+            body.startsWith(BridgeSourceTags.MINECRAFT_DISPLAY.trimStart()) -> "minecraft"
+            body.startsWith(BridgeSourceTags.DISCORD_DISPLAY.trimEnd()) -> "discord"
             body.startsWith("[DC]", ignoreCase = true) -> "discord"
             else -> {
                 val bracket = BRACKET_SOURCE.matcher(body)
                 if (bracket.matches()) {
-                    when (bracket.group(1).trim().lowercase()) {
-                        "telegram", "tg" -> "telegram"
-                        "minecraft", "mc" -> "minecraft"
-                        "discord", "ds", "dc" -> "discord"
-                        else -> bracket.group(1).trim()
-                    }
+                    BridgeSourceTags.normalizeSourceId(bracket.group(1).trim())
                 } else {
                     "minecraft"
                 }
@@ -680,8 +644,13 @@ object NayoGuildBridge : ModInitializer {
     private fun buildMessageBodyComponent(text: String, baseColor: Int, isMine: Boolean): Component {
         val quotePair = QuoteDetector.parseIncomingQuoteBody(text)
         if (quotePair != null) {
-            val (quoted, reply) = quotePair
-            return QuoteDisplay.buildInlineQuoteReply(quoted, reply) { replyText ->
+            val quote = QuoteDetector.parseIncomingQuote(text)
+            return QuoteDisplay.buildInlineQuoteReply(
+                quotePair.first,
+                quotePair.second,
+                quote?.quotedFromUser,
+                quote?.quotedFromInstance
+            ) { replyText ->
                 buildMessageWithWordHighlights(replyText, baseColor, isMine)
             }
         }

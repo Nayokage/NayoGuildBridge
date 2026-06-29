@@ -18,9 +18,9 @@ object QuoteClickHelper {
     fun quotePrefill(senderNick: String, sourceId: String = "discord", quotedText: String? = null): String {
         val cleanNick = senderNick.replace(":", "").trim()
         val sourceLabel = when (sourceId.lowercase()) {
-            "telegram" -> "Telegram"
-            "minecraft" -> "Minecraft"
-            else -> "Discord"
+            "telegram", "tg" -> "Telegram"
+            "minecraft", "mc" -> "Minecraft"
+            else -> "Dis"
         }
         val quoteBody = quotedText
             ?.replace(Regex("""\s*\[q]\s*$""", RegexOption.IGNORE_CASE), "")

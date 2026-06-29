@@ -3,7 +3,6 @@ package com.nayoguildbridge.config
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.components.Button
-import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
 
@@ -11,11 +10,6 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
     private var bridgeEnabled = NgbConfig.config.bridgeEnabled
     private var guildBridgeFormatEnabled = NgbConfig.config.guildBridgeFormatEnabled
     private var bridgeCommandFormatEnabled = NgbConfig.config.bridgeCommandFormatEnabled
-    private var telegramMarker = NgbConfig.config.telegramMarker
-    private var minecraftMarker = NgbConfig.config.minecraftMarker
-
-    private lateinit var tgMarkerBox: EditBox
-    private lateinit var mcMarkerBox: EditBox
 
     override fun init() {
         super.init()
@@ -49,15 +43,6 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
                 b.message = Component.literal(label("Format Bridge commands", bridgeCommandFormatEnabled))
             }.bounds(centerX - w / 2, y, w, h).build()
         )
-        y += gap
-
-        val markerW = (w - 6) / 2
-        tgMarkerBox = EditBox(font, centerX - w / 2, y, markerW, h, Component.literal("TG marker"))
-        tgMarkerBox.value = telegramMarker
-        addRenderableWidget(tgMarkerBox)
-        mcMarkerBox = EditBox(font, centerX - w / 2 + markerW + 6, y, markerW, h, Component.literal("MC marker"))
-        mcMarkerBox.value = minecraftMarker
-        addRenderableWidget(mcMarkerBox)
         y += gap * 2
 
         addRenderableWidget(
@@ -73,8 +58,6 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
         cfg.bridgeEnabled = bridgeEnabled
         cfg.guildBridgeFormatEnabled = guildBridgeFormatEnabled
         cfg.bridgeCommandFormatEnabled = bridgeCommandFormatEnabled
-        cfg.telegramMarker = tgMarkerBox.value.trim().ifEmpty { "[TG]" }
-        cfg.minecraftMarker = mcMarkerBox.value.ifEmpty { "." }
         NgbConfig.save()
     }
 
@@ -91,4 +74,3 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
 
     private fun label(name: String, enabled: Boolean) = "$name: " + if (enabled) "ON" else "OFF"
 }
-

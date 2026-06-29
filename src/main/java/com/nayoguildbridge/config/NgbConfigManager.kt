@@ -328,45 +328,6 @@ object NgbConfigManager {
             ),
 
             FeatureSpec(
-                "entry.ngb.telegramMarker",
-                "tooltip.ngb.telegramMarker",
-                UiCategory.CHAT,
-                "sources",
-                strOpt("entry.ngb.telegramMarker", "tooltip.ngb.telegramMarker", { config.telegramMarker }) {
-                    config.telegramMarker = it.trim().ifEmpty { "[TG]" }
-                }
-            ),
-            FeatureSpec(
-                "entry.ngb.minecraftMarker",
-                "tooltip.ngb.minecraftMarker",
-                UiCategory.CHAT,
-                "sources",
-                strOpt("entry.ngb.minecraftMarker", "tooltip.ngb.minecraftMarker", { config.minecraftMarker }) {
-                    config.minecraftMarker = it.ifEmpty { "." }
-                }
-            ),
-            FeatureSpec(
-                "entry.ngb.telegramLabel",
-                null,
-                UiCategory.CHAT,
-                "sources",
-                strOpt("entry.ngb.telegramLabel", null, { config.telegramLabel }) { config.telegramLabel = it.ifEmpty { "[Telegram] " } }
-            ),
-            FeatureSpec(
-                "entry.ngb.discordLabel",
-                null,
-                UiCategory.CHAT,
-                "sources",
-                strOpt("entry.ngb.discordLabel", null, { config.discordLabel }) { config.discordLabel = it.ifEmpty { "[Discord] " } }
-            ),
-            FeatureSpec(
-                "entry.ngb.minecraftLabel",
-                null,
-                UiCategory.CHAT,
-                "sources",
-                strOpt("entry.ngb.minecraftLabel", null, { config.minecraftLabel }) { config.minecraftLabel = it.ifEmpty { "[Minecraft] " } }
-            ),
-            FeatureSpec(
                 "entry.ngb.telegramLabelColor",
                 null,
                 UiCategory.CHAT,

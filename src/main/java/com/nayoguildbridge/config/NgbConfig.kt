@@ -92,11 +92,6 @@ data class Config(
     var senderNickStyleOnlyMine: Boolean = false,
     var myNickAliases: List<String> = emptyList(),
 
-    var telegramMarker: String = "[TG]",
-    var minecraftMarker: String = ".",
-    var telegramLabel: String = "[Telegram] ",
-    var discordLabel: String = "[Discord] ",
-    var minecraftLabel: String = "[Minecraft] ",
     var telegramLabelColor: String = "#55FFFF",
     var discordLabelColor: String = "#5555FF",
     var minecraftLabelColor: String = "#55FF55",
@@ -107,7 +102,7 @@ data class Config(
 )
 
 object NgbConfig {
-    private const val CURRENT_CONFIG_VERSION = 6
+    private const val CURRENT_CONFIG_VERSION = 7
 
     private val gson = GsonBuilder()
         .setPrettyPrinting()
@@ -191,6 +186,9 @@ object NgbConfig {
             config.quoteSystemEnabled = true
             config.bridgeEnabled = true
             config.bridgeBotFormatEnabled = false
+        }
+        if (config.configVersion < 7) {
+            // Bridge source tags are fixed in code (BridgeSourceTags); only label colors remain in config.
         }
         config.configVersion = CURRENT_CONFIG_VERSION
     }
