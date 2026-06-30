@@ -58,6 +58,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                 if (quote.quoted) {
                     if (quote.body.isBlank()) return@register false
                     BridgeRouter.sendQuote(quote)
+                    showLocalQuoteOutgoing(quote)
                     return@register false
                 }
             }
@@ -171,6 +172,18 @@ object NayoGuildBridgeClient : ClientModInitializer {
         if (player.isBlank() || body.isBlank()) return
         BridgeChatDedupe.remember(BridgeChatDedupe.keyFor(player, body))
         val formatted = IncomingBridgeFormatter.formatLocalOutgoing(player, body, combined = true)
+        Minecraft.getInstance().execute {
+            Minecraft.getInstance().player?.displayClientMessage(formatted, false)
+        }
+    }
+
+    private fun showLocalQuoteOutgoing(quote: QuoteDetector.Result) {
+        val player = Minecraft.getInstance().player?.name?.string?.trim().orEmpty()
+        if (player.isBlank() || quote.body.isBlank()) return
+        val cfg = NgbConfig.config
+        val combined = cfg.imsCombinedBridgeEnabled && cfg.imsCombinedBridgeChatEnabled
+        BridgeChatDedupe.remember(BridgeChatDedupe.keyFor(player, quote.body))
+        val formatted = IncomingBridgeFormatter.formatLocalQuoteOutgoing(player, quote, combined)
         Minecraft.getInstance().execute {
             Minecraft.getInstance().player?.displayClientMessage(formatted, false)
         }

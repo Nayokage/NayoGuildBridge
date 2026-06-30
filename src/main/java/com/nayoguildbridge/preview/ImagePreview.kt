@@ -85,10 +85,12 @@ class ImagePreview(private val urls: List<String>) {
             textureId,
             x,
             y,
-            0,
-            0,
+            0f,
+            0f,
             scaledW,
             scaledH,
+            width,
+            height,
             width,
             height
         )

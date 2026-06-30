@@ -25,6 +25,7 @@ object IncomingBridgeFormatter {
         val quoted: Boolean = false,
         val quotedText: String? = null,
         val quotedFromUser: String? = null,
+        val quotedSource: String? = null,
         val imageUrls: List<String> = emptyList(),
         val isCommand: Boolean = false,
         val hasJsonStack: Boolean = false,
@@ -99,12 +100,17 @@ object IncomingBridgeFormatter {
 
         val combinedMatch = Regex("""^\[B]\s+([^:]{1,64}):\s*(.+)$""").find(raw)
         if (combinedMatch != null) {
+            val rawBody = combinedMatch.groupValues[2].trim()
+            val quote = QuoteDetector.parseIncomingQuote(rawBody)
             return IncomingMessage(
                 source = "minecraft",
                 username = combinedMatch.groupValues[1].trim(),
-                body = combinedMatch.groupValues[2].trim(),
+                body = quote?.replyText ?: rawBody,
                 combined = true,
-                imageUrls = ChatQoL.extractImageUrls(combinedMatch.groupValues[2])
+                quoted = quote != null,
+                quotedText = quote?.quotedText,
+                quotedFromUser = quote?.quotedFromUser,
+                imageUrls = ChatQoL.extractImageUrls(rawBody)
             )
         }
 
@@ -176,6 +182,25 @@ object IncomingBridgeFormatter {
                 username = username,
                 body = body,
                 combined = combined
+            ),
+            NgbConfig.config.imsGuildTag,
+            NgbConfig.config.imsGuildColor
+        )
+    }
+
+    fun formatLocalQuoteOutgoing(username: String, quote: QuoteDetector.Result, combined: Boolean): Component {
+        val quotedText = quote.quotedMessage?.takeIf { it.isNotBlank() } ?: "—"
+        return format(
+            IncomingMessage(
+                source = "minecraft",
+                username = username,
+                body = quote.body,
+                combined = combined,
+                quoted = true,
+                quotedText = quotedText,
+                quotedFromUser = quote.quotedFromUser,
+                quotedSource = quote.quotedFromInstance ?: "discord",
+                imageUrls = ChatQoL.extractImageUrls(quote.body)
             ),
             NgbConfig.config.imsGuildTag,
             NgbConfig.config.imsGuildColor
@@ -370,7 +395,7 @@ object IncomingBridgeFormatter {
                 quoted,
                 bodyText,
                 msg.quotedFromUser,
-                msg.source
+                msg.quotedSource ?: msg.source
             ) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }
