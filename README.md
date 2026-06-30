@@ -44,7 +44,48 @@ Optional:
 
 Config is generated automatically at:
 
-- `config/nayoguildbridge.json`
+- `config/nayoguildbridge.json` 
+
+## Remote Connection & Data Usage
+
+NayoGuildBridge uses remote API and WebSocket connections to provide bridge functionality between Minecraft, Discord, and the bridge website.
+
+### Connected Endpoints
+
+HTTP API:
+
+* https://api.fiokem.cc
+* https://api.2297211.xyz
+
+WebSocket:
+
+* wss://api.fiokem.cc/ws
+* wss://api.2297211.xyz/ws
+
+### Purpose of the Connection
+
+The remote connection is used for:
+
+* Sending and receiving bridge messages
+* Viewing Discord images in-game
+* Replying to and quoting bridge messages
+* Synchronizing guild bridge data
+
+### Data Transmitted
+
+The mod may transmit:
+
+* Minecraft username
+* Message content
+* Guild information
+
+The mod does not collect passwords, payment information, files, or other personal data.
+
+### Open Source
+
+All networking functionality is publicly available in the source code and can be reviewed by anyone:
+
+https://github.com/Nayokage/NayoGuildBridge
 
 ## License
 
