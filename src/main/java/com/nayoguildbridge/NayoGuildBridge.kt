@@ -281,6 +281,7 @@ object NayoGuildBridge : ModInitializer {
         var quotedText = ""
         var quotedUser = ""
         var quotedSource = "Discord"
+        var replySource = "minecraft"
         var replyUser = botNick
         var replyText = ""
 
@@ -304,6 +305,7 @@ object NayoGuildBridge : ModInitializer {
         } else {
             val plain = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""").find(last)
             if (plain != null) {
+                replySource = BridgeTextUtil.normalizeSourceTag(plain.groupValues[1])?.lowercase() ?: "minecraft"
                 replyUser = plain.groupValues[2].trim()
                 replyText = BridgeTextUtil.stripBridgeFormatting(plain.groupValues[3])
             } else {
@@ -318,7 +320,7 @@ object NayoGuildBridge : ModInitializer {
         val replyBody = replyText.ifBlank { " " }
 
         return Component.empty()
-            .append(buildSourceLabelForId(quotedSource.lowercase()))
+            .append(buildSourceLabelForId(replySource.lowercase()))
             .append(senderComponent)
             .append(Component.literal(": ").withColor(config.messageColor.toColor()))
             .append(

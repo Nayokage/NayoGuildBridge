@@ -32,4 +32,13 @@ class QuoteDetectorTest {
         assertEquals("Y3M112", quote?.quotedFromUser)
         assertEquals("Telegram", quote?.quotedFromInstance)
     }
+
+    @Test
+    fun parsesPipeQuoteWithoutLeadingArrow() {
+        val quote = QuoteDetector.parseIncomingQuote("[Dis] Traktorist: кря | Проверка")
+        assertEquals("кря", quote?.quotedText)
+        assertEquals("Проверка", quote?.replyText)
+        assertEquals("Traktorist", quote?.quotedFromUser)
+        assertEquals("Dis", quote?.quotedFromInstance)
+    }
 }

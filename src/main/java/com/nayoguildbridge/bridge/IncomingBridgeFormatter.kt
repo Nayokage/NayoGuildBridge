@@ -190,21 +190,65 @@ object IncomingBridgeFormatter {
 
     fun formatLocalQuoteOutgoing(username: String, quote: QuoteDetector.Result, combined: Boolean): Component {
         val quotedText = quote.quotedMessage?.takeIf { it.isNotBlank() } ?: "—"
-        return format(
-            IncomingMessage(
-                source = "minecraft",
-                username = username,
-                body = quote.body,
-                combined = combined,
-                quoted = true,
-                quotedText = quotedText,
-                quotedFromUser = quote.quotedFromUser,
-                quotedSource = quote.quotedFromInstance ?: "discord",
-                imageUrls = ChatQoL.extractImageUrls(quote.body)
-            ),
-            NgbConfig.config.imsGuildTag,
-            NgbConfig.config.imsGuildColor
+        val quoteSource = BridgeSourceTags.normalizeSourceId(quote.quotedFromInstance ?: "discord")
+        val msg = IncomingMessage(
+            source = "minecraft",
+            username = username,
+            body = quote.body,
+            combined = combined,
+            quoted = true,
+            quotedText = quotedText,
+            quotedFromUser = quote.quotedFromUser,
+            quotedSource = quoteSource,
+            imageUrls = ChatQoL.extractImageUrls(quote.body)
         )
+        if (combined) {
+            return format(msg, NgbConfig.config.imsGuildTag, NgbConfig.config.imsGuildColor)
+        }
+        return formatGuildStyleLocalQuote(msg, quoteSource)
+    }
+
+    private fun formatGuildStyleLocalQuote(msg: IncomingMessage, quoteSource: String): Component {
+        val cfg = NgbConfig.config
+        val nameRgb = configColorHex(cfg.nameColor)
+        val msgRgb = legacyColorToRgb(cfg.messageColor)
+        val bodyText = ChatQoL.applyIncomingBody(msg.body)
+
+        val out = Component.empty()
+            .append(sourceLabelComponent(msg.source))
+            .append(
+                Component.literal(msg.username)
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameRgb)))
+            )
+            .append(
+                Component.literal(": ")
+                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(msgRgb)))
+            )
+            .append(
+                QuoteDisplay.buildInlineQuoteReply(
+                    msg.quotedText ?: "—",
+                    bodyText,
+                    msg.quotedFromUser,
+                    quoteSource
+                ) { reply ->
+                    ChatQoL.toDisplayComponent(reply)
+                        .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(msgRgb)))
+                }
+            )
+
+        val quoteButtonSource = when (quoteSource) {
+            "telegram" -> "telegram"
+            "minecraft" -> "minecraft"
+            else -> "discord"
+        }
+        out.append(
+            QuoteClickHelper.quoteActionButton(
+                msg.quotedFromUser?.takeIf { it.isNotBlank() } ?: msg.username,
+                quoteButtonSource,
+                bodyText
+            )
+        )
+        return out
     }
 
     private fun isExternalSource(source: String): Boolean {
@@ -391,11 +435,12 @@ object IncomingBridgeFormatter {
 
         if (msg.quoted && !msg.quotedText.isNullOrBlank()) {
             val quoted = msg.quotedText
+            val quoteSource = msg.quotedSource?.let { BridgeSourceTags.normalizeSourceId(it) } ?: "discord"
             return QuoteDisplay.buildInlineQuoteReply(
                 quoted,
                 bodyText,
                 msg.quotedFromUser,
-                msg.quotedSource ?: msg.source
+                quoteSource
             ) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }

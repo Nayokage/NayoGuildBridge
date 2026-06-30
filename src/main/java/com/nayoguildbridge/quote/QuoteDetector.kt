@@ -105,19 +105,22 @@ object QuoteDetector {
         if (pipe > 0) {
             val left = text.substring(0, pipe).trim()
             val right = text.substring(pipe + 3).trim()
-            if (left.startsWith(">") && left.length > 1 && right.isNotEmpty()) {
-                val parsed = parseQuotedLine(left.removePrefix(">").trimStart())
-                val quotedText = parsed.third?.takeIf { it.isNotBlank() }
-                    ?: left.removePrefix(">").trimStart()
-                val replyText = cleanIncomingMessageLine(right)
-                if (quotedText.isBlank() || replyText.isBlank()) return null
-                return IncomingQuote(
-                    quotedText = quotedText,
-                    replyText = replyText,
-                    quotedFromInstance = parsed.first,
-                    quotedFromUser = parsed.second,
-                    replyToMessageId = parsed.fourth
-                )
+            if (right.isNotEmpty()) {
+                val quoteRaw = left.removePrefix(">").trimStart()
+                if (quoteRaw.isNotEmpty()) {
+                    val parsed = parseQuotedLine(quoteRaw)
+                    val quotedText = parsed.third?.takeIf { it.isNotBlank() } ?: quoteRaw
+                    val replyText = cleanIncomingMessageLine(right)
+                    if (quotedText.isNotBlank() && replyText.isNotBlank()) {
+                        return IncomingQuote(
+                            quotedText = quotedText,
+                            replyText = replyText,
+                            quotedFromInstance = parsed.first,
+                            quotedFromUser = parsed.second,
+                            replyToMessageId = parsed.fourth
+                        )
+                    }
+                }
             }
         }
         val lines = text.split('\n').map { it.trimEnd() }.filter { it.isNotBlank() }

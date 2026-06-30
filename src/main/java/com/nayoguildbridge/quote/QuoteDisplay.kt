@@ -1,6 +1,7 @@
 package com.nayoguildbridge.quote
 
 import com.nayoguildbridge.QuoteClickHelper
+import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.util.BridgeSourceTags
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
@@ -11,9 +12,8 @@ import net.minecraft.network.chat.TextColor
 object QuoteDisplay {
     private const val INLINE_PREVIEW_MAX = 48
 
-    private val barColor = TextColor.fromRgb(0x5865F2)
-    private val quoteMetaColor = TextColor.fromRgb(0x949BA4)
-    private val quoteTextColor = TextColor.fromRgb(0xB5BAC1)
+    private val pipeColor = TextColor.fromRgb(0x5865F2)
+    private val quoteMetaColor = TextColor.fromRgb(0xB5BAC1)
 
     fun buildInlineQuoteReply(
         quotedText: String,
@@ -23,24 +23,31 @@ object QuoteDisplay {
         replyBuilder: (String) -> Component
     ): Component {
         val preview = truncate(quotedText)
-        val sourceLabel = sourceLabelFor(sourceId)
-        val author = quotedFromUser?.trim()?.takeIf { it.isNotEmpty() }
-
-        val metaLine = if (author != null) "$sourceLabel $author" else sourceLabel
+        val author = quotedFromUser?.trim()?.takeIf { it.isNotEmpty() } ?: "?"
+        val normalizedSource = BridgeSourceTags.normalizeSourceId(sourceId ?: "discord")
 
         val out: MutableComponent = Component.empty()
         out.append(
-            Component.literal("▎ ")
+            Component.literal("| ")
                 .withStyle(
                     Style.EMPTY
-                        .withColor(barColor)
+                        .withColor(pipeColor)
                         .withBold(true)
                 )
         )
+        out.append(sourceLabelComponent(normalizedSource))
         out.append(
-            Component.literal(metaLine)
+            Component.literal("$author: \"")
                 .withStyle(
                     Style.EMPTY
+                        .withColor(quoteMetaColor)
+                        .withItalic(true)
+                )
+        )
+        out.append(
+            Component.literal(preview)
+                .withStyle(
+                    QuoteClickHelper.quotePreviewStyle(quotedText, preview)
                         .withColor(quoteMetaColor)
                         .withItalic(true)
                         .withHoverEvent(
@@ -51,23 +58,32 @@ object QuoteDisplay {
                 )
         )
         out.append(
-            Component.literal(": \"$preview\"")
+            Component.literal("\" ")
                 .withStyle(
-                    QuoteClickHelper.quotePreviewStyle(quotedText, preview)
-                        .withColor(quoteTextColor)
+                    Style.EMPTY
+                        .withColor(quoteMetaColor)
+                        .withItalic(true)
                 )
         )
-        out.append(Component.literal(" "))
         out.append(replyBuilder(replyText))
         return out
     }
 
-    private fun sourceLabelFor(sourceId: String?): String {
-        return when (BridgeSourceTags.normalizeSourceId(sourceId ?: "discord")) {
-            "telegram" -> BridgeSourceTags.TELEGRAM_DISPLAY.trim()
-            "minecraft" -> BridgeSourceTags.MINECRAFT_DISPLAY.trim()
-            else -> BridgeSourceTags.DISCORD_DISPLAY.trim()
+    private fun sourceLabelComponent(sourceId: String): Component {
+        val cfg = NgbConfig.config
+        val (label, colorHex) = when (BridgeSourceTags.normalizeSourceId(sourceId)) {
+            "telegram" -> BridgeSourceTags.TELEGRAM_DISPLAY to cfg.telegramLabelColor
+            "minecraft" -> BridgeSourceTags.MINECRAFT_DISPLAY to cfg.minecraftLabelColor
+            else -> BridgeSourceTags.DISCORD_DISPLAY to cfg.discordLabelColor
         }
+        return Component.literal(label)
+            .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(configColorHex(colorHex))))
+    }
+
+    private fun configColorHex(hex: String): Int = try {
+        Integer.decode(hex)
+    } catch (_: Throwable) {
+        0x55FF55
     }
 
     private fun truncate(text: String): String {
