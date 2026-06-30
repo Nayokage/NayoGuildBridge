@@ -154,14 +154,15 @@ object NayoGuildBridge : ModInitializer {
                 }
 
             val strippedMsg = msg.replaceFirst(Regex("^: "), "")
-            val senderNick = if (bracketParsed != null) {
+            val rawNick = if (bracketParsed != null) {
                 bracketParsed.nick
             } else {
                 extractSenderNick(name)
             }
+            val (senderNick, arrowQuoteTarget) = splitBridgeArrowNick(rawNick)
             if (isIgnoredByPlayer(senderNick)) return ChatTransform.Hide
 
-            val quoteTargetNick = extractQuotePrefillTarget(name, senderNick)
+            val quoteTargetNick = arrowQuoteTarget ?: extractQuotePrefillTarget(name, senderNick)
             val isMine = isMyNick(senderNick)
             val isReplyLike = looksLikeReplyName(if (msg.isEmpty()) text else name)
 
@@ -204,7 +205,13 @@ object NayoGuildBridge : ModInitializer {
             val bodyComponent = if (finalBody.isBlank()) {
                 Component.empty()
             } else {
-                var body = buildMessageBodyComponent(finalBody, config.messageColor.toColor(), isMine)
+                var body = buildMessageBodyComponent(
+                    finalBody,
+                    config.messageColor.toColor(),
+                    isMine,
+                    sourceIdFromBody,
+                    arrowQuoteTarget
+                )
                 if (config.nickHighlightEnabled) {
                     body = recolorNickOfPlayer(body, Integer.decode(config.nickHighlightColor), bold = true)
                 }
@@ -643,7 +650,13 @@ object NayoGuildBridge : ModInitializer {
         return out
     }
 
-    private fun buildMessageBodyComponent(text: String, baseColor: Int, isMine: Boolean): Component {
+    private fun buildMessageBodyComponent(
+        text: String,
+        baseColor: Int,
+        isMine: Boolean,
+        quoteSourceId: String = "discord",
+        arrowQuoteTarget: String? = null
+    ): Component {
         val quotePair = QuoteDetector.parseIncomingQuoteBody(text)
         if (quotePair != null) {
             val quote = QuoteDetector.parseIncomingQuote(text)
@@ -651,12 +664,42 @@ object NayoGuildBridge : ModInitializer {
                 quotePair.first,
                 quotePair.second,
                 quote?.quotedFromUser,
-                quote?.quotedFromInstance
+                quote?.quotedFromInstance ?: quoteSourceId
+            ) { replyText ->
+                buildMessageWithWordHighlights(replyText, baseColor, isMine)
+            }
+        }
+        if (!arrowQuoteTarget.isNullOrBlank()) {
+            return QuoteDisplay.buildInlineQuoteReply(
+                "—",
+                text,
+                arrowQuoteTarget,
+                quoteSourceId
             ) { replyText ->
                 buildMessageWithWordHighlights(replyText, baseColor, isMine)
             }
         }
         return buildMessageWithWordHighlights(text, baseColor, isMine)
+    }
+
+    private fun splitBridgeArrowNick(raw: String): Pair<String, String?> {
+        val s = raw.trim()
+        if (s.isEmpty()) return "" to null
+        val gt = s.indexOf("->")
+        if (gt > 0) {
+            val sender = s.substring(0, gt).trim()
+            val target = s.substring(gt + 2).trim()
+            if (sender.isNotEmpty() && target.isNotEmpty()) return sender to target
+        }
+        for (arrow in charArrayOf('⇾', '→')) {
+            val idx = s.indexOf(arrow)
+            if (idx > 0) {
+                val sender = s.substring(0, idx).trim()
+                val target = s.substring(idx + 1).trim()
+                if (sender.isNotEmpty() && target.isNotEmpty()) return sender to target
+            }
+        }
+        return s to null
     }
 
     private fun extractQuotedAuthor(quotedLine: String): String? {
@@ -687,7 +730,7 @@ object NayoGuildBridge : ModInitializer {
         val s = namePartRaw.trim()
         if (s.isEmpty()) return false
         if (s.contains("replied to", ignoreCase = true)) return true
-        if (s.contains('→')) return true
+        if (s.contains('⇾') || s.contains('→') || s.contains("->")) return true
         return false
     }
 
@@ -735,8 +778,13 @@ object NayoGuildBridge : ModInitializer {
             s = s.substring(end + 1).trimStart()
         }
         val token = s.split(" ").firstOrNull().orEmpty()
-        val arrow = token.indexOf('→')
-        return if (arrow > 0) token.substring(0, arrow) else token
+        val gt = token.indexOf("->")
+        if (gt > 0) return token.substring(0, gt).trim()
+        for (arrow in charArrayOf('⇾', '→')) {
+            val idx = token.indexOf(arrow)
+            if (idx > 0) return token.substring(0, idx).trim()
+        }
+        return token
     }
 
     private fun isMyNick(nick: String): Boolean {
