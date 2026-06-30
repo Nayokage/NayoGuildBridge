@@ -119,7 +119,13 @@ object ChatQoL {
 
     fun imageLinkComponent(url: String, mirrorUrls: List<String> = emptyList()): MutableComponent {
         val clean = url.trim()
-        val allUrls = if (mirrorUrls.isNotEmpty()) mirrorUrls else listOf(clean)
+        val allUrls = when {
+            mirrorUrls.isNotEmpty() -> mirrorUrls.distinct()
+            else -> {
+                val token = mediaTokenFromApiUrl(clean)
+                if (token != null) mediaUrlsForToken(token) else listOf(clean)
+            }
+        }
         allUrls.forEach { ImagePreviewHandler.registerImageUrl(it) }
         val token = ImagePreviewHandler.registerPreviewUrls(allUrls)
         val label = when {

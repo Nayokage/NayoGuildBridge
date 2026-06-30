@@ -50,25 +50,29 @@ object NayoGuildBridgeClient : ClientModInitializer {
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
             if (!EnvironmentGuard.isOperational()) return@register true
+            if (message.startsWith("/")) return@register true
+
             val cfg = NgbConfig.config
+            if (QuoteConfigManager.quoteSystemEnabled()) {
+                val quote = QuoteDetector.detect(message)
+                if (quote.quoted) {
+                    if (quote.body.isBlank()) return@register false
+                    BridgeRouter.sendQuote(quote)
+                    return@register false
+                }
+            }
+
             if (
                 cfg.imsCombinedBridgeEnabled &&
                 cfg.imsCombinedBridgeChatEnabled &&
-                BridgeRouter.canSendCombined() &&
-                !message.startsWith("/")
+                BridgeRouter.canSendCombined()
             ) {
                 val body = ChatQoL.applyOutgoingBody(message)
                 BridgeRouter.sendCombined(body)
                 showLocalCombinedOutgoing(body)
                 return@register false
             }
-            if (!QuoteConfigManager.quoteSystemEnabled()) return@register true
-            if (message.startsWith("/")) return@register true
-            val quote = QuoteDetector.detect(message)
-            if (!quote.quoted) return@register true
-            if (quote.body.isBlank()) return@register false
-            BridgeRouter.sendQuote(quote)
-            return@register false
+            return@register true
         }
 
         ClientSendMessageEvents.CHAT.register { message ->

@@ -7,6 +7,8 @@ import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.texture.DynamicTexture
 import net.minecraft.resources.ResourceLocation
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
@@ -27,14 +29,15 @@ class ImagePreview(private val urls: List<String>) {
     @Volatile private var height = 0
 
     fun isReady(): Boolean = width > 0 && height > 0
+    fun isLoading(): Boolean = loading
     fun isFailed(): Boolean = failed
     fun failureMessage(): String = failureReason
 
     fun load(client: Minecraft) {
         if (loading || failed || width > 0) return
         loading = true
-        CompletableFuture.supplyAsync { download(url) }.whenComplete { bytes, err ->
-            if (err != null || bytes == null) {
+        CompletableFuture.supplyAsync { download(url) }.whenComplete { native, err ->
+            if (err != null || native == null) {
                 failureReason = err?.message ?: "Пустой ответ"
                 failed = true
                 loading = false
@@ -42,10 +45,10 @@ class ImagePreview(private val urls: List<String>) {
             }
             client.execute {
                 try {
-                    val native = NativeImage.read(bytes)
                     width = native.width
                     height = native.height
                     val texture = DynamicTexture({ "ngb-preview-$url" }, native)
+                    texture.upload()
                     client.textureManager.register(textureId, texture)
                 } catch (t: Throwable) {
                     failureReason = t.message ?: "Ошибка декодирования"
@@ -65,14 +68,7 @@ class ImagePreview(private val urls: List<String>) {
         maxWidth: Int,
         maxHeight: Int
     ) {
-        if (failed) {
-            drawMessageAt(context, client, failureReason, x, y)
-            return
-        }
-        if (width <= 0 || height <= 0) {
-            drawMessageAt(context, client, "Загрузка изображения...", x, y)
-            return
-        }
+        if (failed || width <= 0 || height <= 0) return
 
         val (scaledW, scaledH) = scaledSize(maxWidth, maxHeight)
         val frameLeft = x - 1
@@ -87,58 +83,97 @@ class ImagePreview(private val urls: List<String>) {
         context.blit(
             RenderPipelines.GUI_TEXTURED,
             textureId,
-            x, y,
-            0f, 0f,
-            scaledW, scaledH,
-            width, height
+            x,
+            y,
+            0,
+            0,
+            scaledW,
+            scaledH,
+            width,
+            height
         )
     }
 
     fun scaledSize(maxWidth: Int, maxHeight: Int): Pair<Int, Int> {
-        if (width <= 0 || height <= 0) return 1 to 1
-        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height)
+        if (width <= 0 || height <= 0) return maxWidth.coerceAtMost(320) to maxHeight.coerceAtMost(240)
+        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1f)
         if (scale <= 0f) scale = 1f
         val scaledW = (width * scale).toInt().coerceAtLeast(1)
         val scaledH = (height * scale).toInt().coerceAtLeast(1)
         return scaledW to scaledH
     }
 
-    private fun drawMessageAt(context: GuiGraphics, client: Minecraft, text: String, x: Int, y: Int) {
-        val w = client.font.width(text) + 12
-        context.fill(x - 4, y - 4, x + w, y + client.font.lineHeight + 6, 0xE6000000.toInt())
-        context.drawString(client.font, text, x, y, 0xFFFFFF)
+    fun statusText(): String = when {
+        failed -> failureReason
+        loading || width <= 0 || height <= 0 -> "Загрузка изображения..."
+        else -> ""
     }
 
-    private fun download(imageUrl: String): ByteArray? {
+    private fun download(imageUrl: String): NativeImage? {
         val candidates = if (urls.isNotEmpty()) urls else listOf(imageUrl)
+        var lastError = "Не удалось загрузить изображение"
         for (candidate in candidates.distinct()) {
-            downloadOne(candidate)?.let { return it }
-        }
-        return null
-    }
-
-    private fun downloadOne(imageUrl: String): ByteArray? {
-        return try {
-            val conn = URI(imageUrl).toURL().openConnection() as HttpURLConnection
-            conn.connectTimeout = 6000
-            conn.readTimeout = 12000
-            conn.setRequestProperty("User-Agent", "NayoGuildBridge/1.1")
-            conn.setRequestProperty("Accept", "image/*,*/*;q=0.8")
-            conn.instanceFollowRedirects = true
-            if (conn.responseCode !in 200..299) return null
-            conn.inputStream.use { it.readBytes() }
-        } catch (t: Throwable) {
-            NayoGuildBridge.logger.debug("[NGB] image download: ${t.message}")
             try {
-                val img = ImageIO.read(URI(imageUrl).toURL())
-                if (img == null) return null
-                val out = java.io.ByteArrayOutputStream()
-                ImageIO.write(img, "png", out)
-                out.toByteArray()
-            } catch (_: Throwable) {
-                null
+                decodeImage(downloadBytes(candidate))?.let { return it }
+            } catch (t: Throwable) {
+                lastError = t.message ?: lastError
+                NayoGuildBridge.logger.debug("[NGB] image download: ${t.message}")
             }
         }
+        throw IllegalStateException(lastError)
+    }
+
+    private fun downloadBytes(imageUrl: String): ByteArray {
+        val conn = openConnection(URI(imageUrl), 0)
+        conn.inputStream.use { stream ->
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = stream.read(buffer)
+                if (read <= 0) break
+                out.write(buffer, 0, read)
+            }
+            val bytes = out.toByteArray()
+            if (bytes.isEmpty()) throw IllegalStateException("Пустой ответ")
+            return bytes
+        }
+    }
+
+    private fun openConnection(uri: URI, redirectCount: Int): HttpURLConnection {
+        if (redirectCount > 5) throw IllegalStateException("Слишком много редиректов")
+        val conn = uri.toURL().openConnection() as HttpURLConnection
+        conn.connectTimeout = 6000
+        conn.readTimeout = 12000
+        conn.setRequestProperty("User-Agent", "NayoGuildBridge/1.1")
+        conn.setRequestProperty("Accept", "image/png,image/jpeg,image/webp,image/*;q=0.8,*/*;q=0.5")
+        conn.instanceFollowRedirects = false
+        val status = conn.responseCode
+        if (status in 300..399) {
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            if (location.isNullOrBlank()) throw IllegalStateException("Редирект без Location")
+            return openConnection(uri.resolve(location.trim()), redirectCount + 1)
+        }
+        if (status !in 200..299) {
+            conn.disconnect()
+            throw IllegalStateException("HTTP $status")
+        }
+        return conn
+    }
+
+    private fun decodeImage(bytes: ByteArray): NativeImage? {
+        try {
+            return NativeImage.read(bytes)
+        } catch (_: Throwable) {
+            return decodeWithImageIo(bytes)
+        }
+    }
+
+    private fun decodeWithImageIo(bytes: ByteArray): NativeImage? {
+        val buffered = ImageIO.read(ByteArrayInputStream(bytes)) ?: return null
+        val out = ByteArrayOutputStream()
+        ImageIO.write(buffered, "png", out)
+        return NativeImage.read(out.toByteArray())
     }
 
     private fun sha1(value: String): String {

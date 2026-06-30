@@ -99,6 +99,10 @@ class ImagePreviewScreen(
         )
     }
 
+    override fun renderBackground(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
+        guiGraphics.fill(0, 0, width, height, 0xE0101010.toInt())
+    }
+
     override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
         renderBackground(guiGraphics, mouseX, mouseY, partialTick)
         guiGraphics.drawCenteredString(font, title, width / 2, 12, 0xFFFFFF)
@@ -119,10 +123,16 @@ class ImagePreviewScreen(
         preview.load(client)
         val maxW = (width * 0.86).toInt().coerceAtLeast(64)
         val maxH = (height * 0.68).toInt().coerceAtLeast(64)
-        val (scaledW, scaledH) = preview.scaledSize(maxW, maxH)
-        val x = (width - scaledW) / 2
-        val y = 28 + ((height - 28 - 48 - scaledH) / 2).coerceAtLeast(8)
-        preview.renderAt(guiGraphics, client, x, y, maxW, maxH)
+
+        val status = preview.statusText()
+        if (status.isNotEmpty()) {
+            guiGraphics.drawCenteredString(font, status, width / 2, height / 2 - 8, 0xCCCCCC)
+        } else {
+            val (scaledW, scaledH) = preview.scaledSize(maxW, maxH)
+            val x = (width - scaledW) / 2
+            val y = 28 + ((height - 28 - 48 - scaledH) / 2).coerceAtLeast(8)
+            preview.renderAt(guiGraphics, client, x, y, maxW, maxH)
+        }
 
         if (preview.isReady()) {
             guiGraphics.drawCenteredString(font, "Esc — закрыть", width / 2, height - 52, 0x888888)
