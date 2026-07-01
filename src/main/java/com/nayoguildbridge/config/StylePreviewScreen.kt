@@ -1,7 +1,7 @@
 package com.nayoguildbridge.config
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
@@ -19,13 +19,13 @@ class StylePreviewScreen(private val parent: Screen?) : Screen(Component.literal
         )
     }
 
-    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick)
+    override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        extractBackground(guiGraphics, mouseX, mouseY, partialTick)
 
-        guiGraphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF)
+        guiGraphics.centeredText(font, title, width / 2, 16, 0xFFFFFF)
 
         var y = 36
-        guiGraphics.drawString(font, Component.literal("Colors:"), 16, y, 0xFFFFFF)
+        guiGraphics.text(font, Component.literal("Colors:"), 16, y, 0xFFFFFF)
         y += 12
 
         val colorCodes = listOf(
@@ -37,21 +37,21 @@ class StylePreviewScreen(private val parent: Screen?) : Screen(Component.literal
             val text = Component.literal("$code  $code ExampleText")
             val x = 16 + (i % 2) * (width / 2 - 16)
             if (i % 2 == 0 && i > 0) y += 12
-            guiGraphics.drawString(font, text, x, y, 0xFFFFFF)
+            guiGraphics.text(font, text, x, y, 0xFFFFFF)
         }
 
         y += 24
-        guiGraphics.drawString(font, Component.literal("Styles:"), 16, y, 0xFFFFFF)
+        guiGraphics.text(font, Component.literal("Styles:"), 16, y, 0xFFFFFF)
         y += 12
-        guiGraphics.drawString(font, Component.literal("§l  §lBold"), 16, y, 0xFFFFFF); y += 12
-        guiGraphics.drawString(font, Component.literal("§o  §oItalic"), 16, y, 0xFFFFFF); y += 12
-        guiGraphics.drawString(font, Component.literal("§n  §nUnderline"), 16, y, 0xFFFFFF); y += 12
-        guiGraphics.drawString(font, Component.literal("§m  §mStrikethrough"), 16, y, 0xFFFFFF); y += 12
-        guiGraphics.drawString(font, Component.literal("§k  §kObfuscated"), 16, y, 0xFFFFFF); y += 12
-        guiGraphics.drawString(font, Component.literal("§r  Reset (back to normal)"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§l  §lBold"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§o  §oItalic"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§n  §nUnderline"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§m  §mStrikethrough"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§k  §kObfuscated"), 16, y, 0xFFFFFF); y += 12
+        guiGraphics.text(font, Component.literal("§r  Reset (back to normal)"), 16, y, 0xFFFFFF); y += 12
 
         y += 12
-        guiGraphics.drawString(
+        guiGraphics.text(
             font,
             Component.literal("Example for nick codes: \"§4§l\" -> §4§lSomeNick§r"),
             16,
@@ -59,7 +59,7 @@ class StylePreviewScreen(private val parent: Screen?) : Screen(Component.literal
             0xFFFFFF
         )
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick)
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick)
     }
 }
 

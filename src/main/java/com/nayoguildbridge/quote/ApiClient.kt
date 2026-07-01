@@ -143,7 +143,7 @@ object ApiClient {
     private fun showInGame(text: String) {
         val mc = Minecraft.getInstance()
         mc.execute {
-            mc.player?.displayClientMessage(Component.literal(text), false)
+            mc.player?.sendSystemMessage(Component.literal(text))
         }
     }
 }

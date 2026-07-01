@@ -3,10 +3,10 @@ package com.nayoguildbridge.preview
 import com.nayoguildbridge.NayoGuildBridge
 import com.mojang.blaze3d.platform.NativeImage
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.client.renderer.texture.DynamicTexture
-import net.minecraft.resources.ResourceLocation
+import net.minecraft.resources.Identifier
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
@@ -15,7 +15,7 @@ import javax.imageio.ImageIO
 
 class ImagePreview(private val urls: List<String>) {
     private val url: String = urls.firstOrNull().orEmpty()
-    private val textureId: ResourceLocation = ResourceLocation.fromNamespaceAndPath(
+    private val textureId: Identifier = Identifier.fromNamespaceAndPath(
         "nayoguildbridge",
         "image_preview/${sha1(url)}"
     )
@@ -53,7 +53,7 @@ class ImagePreview(private val urls: List<String>) {
         }
     }
 
-    fun render(context: GuiGraphics, client: Minecraft, maxWidth: Int, maxHeight: Int) {
+    fun render(context: GuiGraphicsExtractor, client: Minecraft, maxWidth: Int, maxHeight: Int) {
         if (failed) {
             drawMessage(context, client, failureReason)
             return
@@ -63,7 +63,7 @@ class ImagePreview(private val urls: List<String>) {
             return
         }
 
-        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1f)
+        val scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1f)
         val scaledW = (width * scale).toInt().coerceAtLeast(1)
         val scaledH = (height * scale).toInt().coerceAtLeast(1)
 
@@ -86,9 +86,9 @@ class ImagePreview(private val urls: List<String>) {
         )
     }
 
-    private fun drawMessage(context: GuiGraphics, client: Minecraft, text: String) {
+    private fun drawMessage(context: GuiGraphicsExtractor, client: Minecraft, text: String) {
         context.fill(4, 4, 220, 18, 0xCC000000.toInt())
-        context.drawString(client.font, text, 8, 8, 0xFFFFFF)
+        context.text(client.font, text, 8, 8, 0xFFFFFF)
     }
 
     private fun download(imageUrl: String): ByteArray? {

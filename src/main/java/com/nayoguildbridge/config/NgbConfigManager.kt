@@ -13,7 +13,7 @@ import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
-import net.minecraft.Util
+import net.minecraft.util.Util
 import net.minecraft.network.chat.Component
 
 object NgbConfigManager {
@@ -641,11 +641,11 @@ object NgbConfigManager {
             .text(NgbLang.component("about.ngb.printInfoAction"))
             .action {
                 val player = Minecraft.getInstance().player ?: return@action
-                player.displayClientMessage(Component.literal("§b[NayoGuildBridge] §fSections:"), false)
-                player.displayClientMessage(Component.literal("§7- §fGeneral: enable bridge, markers"), false)
-                player.displayClientMessage(Component.literal("§7- §fChat: formatting, nick style, filters"), false)
-                player.displayClientMessage(Component.literal("§7- §fAPI: poll, WebSocket, quotes"), false)
-                player.displayClientMessage(Component.literal("§7- §fMisc: links, image preview, copy chat"), false)
+                player.sendSystemMessage(Component.literal("§b[NayoGuildBridge] §fSections:"))
+                player.sendSystemMessage(Component.literal("§7- §fGeneral: enable bridge, markers"))
+                player.sendSystemMessage(Component.literal("§7- §fChat: formatting, nick style, filters"))
+                player.sendSystemMessage(Component.literal("§7- §fAPI: poll, WebSocket, quotes"))
+                player.sendSystemMessage(Component.literal("§7- §fMisc: links, image preview, copy chat"))
             }
             .description(OptionDescription.of(NgbLang.component("tooltip.ngb.about.printInfo")))
             .build()
@@ -657,9 +657,8 @@ object NgbConfigManager {
             .text(NgbLang.component("about.ngb.copy"))
             .action {
                 Minecraft.getInstance().keyboardHandler.setClipboard(url)
-                Minecraft.getInstance().player?.displayClientMessage(
-                    Component.literal("§a[NayoGuildBridge] §fGitHub: §b$url"),
-                    false
+                Minecraft.getInstance().player?.sendSystemMessage(
+                    Component.literal("§a[NayoGuildBridge] §fGitHub: §b$url")
                 )
             }
             .description(OptionDescription.of(Component.literal(url)))
@@ -792,9 +791,8 @@ object NgbConfigManager {
             if (useRu) "§cвыключено" else "§cOFF"
         }
         Minecraft.getInstance().execute {
-            Minecraft.getInstance().player?.displayClientMessage(
-                Component.literal("§a[NGB] §f$label: $state"),
-                false
+            Minecraft.getInstance().player?.sendSystemMessage(
+                Component.literal("§a[NGB] §f$label: $state")
             )
         }
     }

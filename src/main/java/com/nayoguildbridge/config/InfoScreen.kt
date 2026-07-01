@@ -1,10 +1,10 @@
 package com.nayoguildbridge.config
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
-import net.minecraft.Util
+import net.minecraft.util.Util
 import net.minecraft.network.chat.Component
 
 class InfoScreen(private val parent: Screen?) : Screen(Component.literal("NayoGuildBridge / Info")) {
@@ -21,11 +21,11 @@ class InfoScreen(private val parent: Screen?) : Screen(Component.literal("NayoGu
         addRenderableWidget(
             Button.builder(Component.literal("Print info to chat")) {
                 val player = Minecraft.getInstance().player
-                player?.displayClientMessage(Component.literal("§b[NayoGuildBridge] §fSections:"), false)
-                player?.displayClientMessage(Component.literal("§7- §fGeneral: enable bridge, markers"), false)
-                player?.displayClientMessage(Component.literal("§7- §fNick: apply § codes / color to sender nick"), false)
-                player?.displayClientMessage(Component.literal("§7- §fWords: highlight words using rules like scam=§4§l"), false)
-                player?.displayClientMessage(Component.literal("§7- §fBlocklist: hide bridged messages that contain blocked entries"), false)
+                player?.sendSystemMessage(Component.literal("§b[NayoGuildBridge] §fSections:"))
+                player?.sendSystemMessage(Component.literal("§7- §fGeneral: enable bridge, markers"))
+                player?.sendSystemMessage(Component.literal("§7- §fNick: apply § codes / color to sender nick"))
+                player?.sendSystemMessage(Component.literal("§7- §fWords: highlight words using rules like scam=§4§l"))
+                player?.sendSystemMessage(Component.literal("§7- §fBlocklist: hide bridged messages that contain blocked entries"))
             }.bounds(centerX - w / 2, y, w, h).build()
         )
         y += gap
@@ -34,9 +34,8 @@ class InfoScreen(private val parent: Screen?) : Screen(Component.literal("NayoGu
             Button.builder(Component.literal("Copy GitHub repo link")) {
                 val url = "https://github.com/Nayokage/BridgeFilter"
                 Minecraft.getInstance().keyboardHandler.setClipboard(url)
-                Minecraft.getInstance().player?.displayClientMessage(
-                    Component.literal("§a[NayoGuildBridge] §fGitHub link copied: §b$url"),
-                    false
+                Minecraft.getInstance().player?.sendSystemMessage(
+                    Component.literal("§a[NayoGuildBridge] §fGitHub link copied: §b$url")
                 )
             }.bounds(centerX - w / 2, y, w, h).build()
         )
@@ -77,12 +76,12 @@ class InfoScreen(private val parent: Screen?) : Screen(Component.literal("NayoGu
         )
     }
 
-    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick)
-        guiGraphics.drawCenteredString(font, title, width / 2, 16, 0xFFFFFF)
-        guiGraphics.drawString(font, Component.literal("This menu is split into sections."), 16, 40, 0xAAAAAA)
-        guiGraphics.drawString(font, Component.literal("Use 'Print info to chat' for a quick explanation."), 16, 52, 0xAAAAAA)
-        super.render(guiGraphics, mouseX, mouseY, partialTick)
+    override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        extractBackground(guiGraphics, mouseX, mouseY, partialTick)
+        guiGraphics.centeredText(font, title, width / 2, 16, 0xFFFFFF)
+        guiGraphics.text(font, Component.literal("This menu is split into sections."), 16, 40, 0xAAAAAA)
+        guiGraphics.text(font, Component.literal("Use 'Print info to chat' for a quick explanation."), 16, 52, 0xAAAAAA)
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick)
     }
 }
 

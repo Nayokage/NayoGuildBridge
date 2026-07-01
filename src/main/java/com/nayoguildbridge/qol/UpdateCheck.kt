@@ -56,7 +56,7 @@ object UpdateCheck {
 
     private fun notify(text: String) {
         Minecraft.getInstance().execute {
-            Minecraft.getInstance().player?.displayClientMessage(Component.literal(text), false)
+            Minecraft.getInstance().player?.sendSystemMessage(Component.literal(text))
         }
     }
 }

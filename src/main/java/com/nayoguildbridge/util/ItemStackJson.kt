@@ -2,7 +2,7 @@ package com.nayoguildbridge.util
 
 import com.google.gson.JsonParser
 import net.minecraft.core.registries.BuiltInRegistries
-import net.minecraft.resources.ResourceLocation
+import net.minecraft.resources.Identifier
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 
@@ -20,8 +20,9 @@ object ItemStackJson {
             val obj = JsonParser.parseString(raw).asJsonObject
             val id = obj.get("id")?.asString ?: return null
             val count = obj.get("count")?.asInt?.coerceAtLeast(1) ?: 1
-            val loc = ResourceLocation.tryParse(id) ?: return null
-            val item = BuiltInRegistries.ITEM.getOptional(loc).orElse(Items.AIR)
+            val loc = Identifier.tryParse(id) ?: return null
+            if (!BuiltInRegistries.ITEM.containsKey(loc)) return null
+            val item = BuiltInRegistries.ITEM.getValue(loc)
             if (item == Items.AIR) return null
             ItemStack(item, count)
         } catch (_: Throwable) {

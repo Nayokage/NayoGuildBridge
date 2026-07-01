@@ -37,7 +37,7 @@ object ImsChatDisplay {
 
         val mc = Minecraft.getInstance()
         mc.execute {
-            mc.player?.displayClientMessage(formatted, false)
+            mc.player?.sendSystemMessage(formatted)
         }
     }
 
@@ -62,7 +62,7 @@ object ImsChatDisplay {
         }
         val mc = Minecraft.getInstance()
         mc.execute {
-            mc.player?.displayClientMessage(Component.literal(sb.toString().trimEnd()), false)
+            mc.player?.sendSystemMessage(Component.literal(sb.toString().trimEnd()))
         }
     }
 }

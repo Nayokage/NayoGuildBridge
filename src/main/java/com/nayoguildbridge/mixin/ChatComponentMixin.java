@@ -9,13 +9,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ChatComponent.class)
 public class ChatComponentMixin {
-    /** 1.21.10+: renamed from removeTrimmedMessages; require=0 — один jar на 1.21.9–1.21.11 */
-    @Inject(method = "refreshTrimmedMessages", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "refreshTrimmedMessages", at = @At("HEAD"), cancellable = true)
     private void ngb$unlimitedChatRefresh(CallbackInfo ci) {
         ngb$cancelIfUnlimited(ci);
     }
 
-    @Inject(method = "removeTrimmedMessages", at = @At("HEAD"), cancellable = true, require = 0)
+    @Inject(method = "removeTrimmedMessages", at = @At("HEAD"), cancellable = true)
     private void ngb$unlimitedChatRemove(CallbackInfo ci) {
         ngb$cancelIfUnlimited(ci);
     }

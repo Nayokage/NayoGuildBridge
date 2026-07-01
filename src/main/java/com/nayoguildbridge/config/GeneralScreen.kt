@@ -1,7 +1,7 @@
 package com.nayoguildbridge.config
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
@@ -83,10 +83,10 @@ class GeneralScreen(private val parent: Screen?) : Screen(Component.literal("Nay
         Minecraft.getInstance().setScreen(parent)
     }
 
-    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick)
-        guiGraphics.drawCenteredString(font, title, width / 2, height / 4 - 30, 0xFFFFFF)
-        super.render(guiGraphics, mouseX, mouseY, partialTick)
+    override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        extractBackground(guiGraphics, mouseX, mouseY, partialTick)
+        guiGraphics.centeredText(font, title, width / 2, height / 4 - 30, 0xFFFFFF)
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick)
     }
 
     private fun label(name: String, enabled: Boolean) = "$name: " + if (enabled) "ON" else "OFF"

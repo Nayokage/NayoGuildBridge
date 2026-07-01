@@ -1,7 +1,7 @@
 package com.nayoguildbridge.config
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
@@ -60,17 +60,17 @@ class MenuRootScreen(private val parent: Screen?) : Screen(Component.literal("Na
         )
     }
 
-    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick)
-        guiGraphics.drawCenteredString(font, title, width / 2, height / 4 - 30, 0xFFFFFF)
-        guiGraphics.drawCenteredString(
+    override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        extractBackground(guiGraphics, mouseX, mouseY, partialTick)
+        guiGraphics.centeredText(font, title, width / 2, height / 4 - 30, 0xFFFFFF)
+        guiGraphics.centeredText(
             font,
             Component.literal("Vanilla menu mode (works without Cloth Config)"),
             width / 2,
             height / 4 - 16,
             0xAAAAAA
         )
-        super.render(guiGraphics, mouseX, mouseY, partialTick)
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick)
     }
 }
 

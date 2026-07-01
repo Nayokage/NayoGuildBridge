@@ -1,7 +1,7 @@
 package com.nayoguildbridge.config
 
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.GuiGraphicsExtractor
 import net.minecraft.client.gui.components.Button
 import net.minecraft.client.gui.components.EditBox
 import net.minecraft.client.gui.screens.Screen
@@ -85,17 +85,17 @@ class BlocklistScreen(
         )
     }
 
-    override fun render(guiGraphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick)
-        guiGraphics.drawCenteredString(font, title, width / 2, height / 4 - 20, 0xFFFFFF)
-        guiGraphics.drawCenteredString(
+    override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, partialTick: Float) {
+        extractBackground(guiGraphics, mouseX, mouseY, partialTick)
+        guiGraphics.centeredText(font, title, width / 2, height / 4 - 20, 0xFFFFFF)
+        guiGraphics.centeredText(
             font,
             Component.literal("Total: ${items.size} (page ${page + 1})"),
             width / 2,
             height / 4 - 8,
             0xAAAAAA
         )
-        super.render(guiGraphics, mouseX, mouseY, partialTick)
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick)
     }
 }
 

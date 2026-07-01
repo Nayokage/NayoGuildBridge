@@ -144,13 +144,11 @@ object RemoteBridgeApi {
                         val text = obj.get("text")?.asString ?: continue
                         val mode = obj.get("mode")?.asString ?: "chat"
                         when (mode) {
-                            "suggest" -> client.player?.displayClientMessage(
-                                Component.literal("§b◇ §f$text"),
-                                false
+                            "suggest" -> client.player?.sendSystemMessage(
+                                Component.literal("§b◇ §f$text")
                             )
-                            else -> client.player?.displayClientMessage(
-                                Component.literal("§7◇ §f$text"),
-                                false
+                            else -> client.player?.sendSystemMessage(
+                                Component.literal("§7◇ §f$text")
                             )
                         }
                     }

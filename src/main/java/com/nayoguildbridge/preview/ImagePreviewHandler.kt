@@ -4,7 +4,9 @@ import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.qol.ChatQoL
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents
 import net.minecraft.client.Minecraft
-import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.ActiveTextCollector
+import net.minecraft.client.gui.GuiGraphicsExtractor
+import net.minecraft.client.gui.components.ChatComponent
 import net.minecraft.client.gui.screens.ChatScreen
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.ClickEvent
@@ -24,7 +26,7 @@ object ImagePreviewHandler {
     fun register() {
         ScreenEvents.AFTER_INIT.register { _, screen, _, _ ->
             if (screen is ChatScreen) {
-                ScreenEvents.afterRender(screen).register(::render)
+                ScreenEvents.afterExtract(screen).register(::render)
             }
         }
     }
@@ -33,7 +35,7 @@ object ImagePreviewHandler {
         previewableUrls.add(URI.create(imageUrl).toString())
     }
 
-    private fun render(screen: Screen, context: GuiGraphics, mouseX: Int, mouseY: Int, tickDelta: Float) {
+    private fun render(screen: Screen, context: GuiGraphicsExtractor, mouseX: Int, mouseY: Int, tickDelta: Float) {
         if (!NgbConfig.config.imagePreviewEnabled) return
         val client = Minecraft.getInstance()
         if (screen !is ChatScreen || client.level == null) return
@@ -62,20 +64,45 @@ object ImagePreviewHandler {
 
     private fun getHoveredStyle(client: Minecraft, mouseX: Int, mouseY: Int): Style? {
         val chat = client.gui.chat
+        return getDrawnTextHoveredStyle(client, chat, mouseX, mouseY)
+            ?: getLegacyHoveredStyle(chat, mouseX, mouseY)
+    }
+
+    private fun getDrawnTextHoveredStyle(
+        client: Minecraft,
+        chat: ChatComponent,
+        mouseX: Int,
+        mouseY: Int,
+    ): Style? {
         return try {
-            chat.getClickedComponentStyleAt(mouseX.toDouble(), mouseY.toDouble())
+            var finder = ActiveTextCollector.ClickableStyleFinder(client.font, mouseX, mouseY)
+            finder = finder.includeInsertions(client.hasShiftDown())
+            chat.captureClickableText(
+                finder,
+                client.window.guiScaledHeight,
+                client.gui.guiTicks,
+                ChatComponent.DisplayMode.FOREGROUND,
+            )
+            finder.result()
         } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun getLegacyHoveredStyle(chat: ChatComponent, mouseX: Int, mouseY: Int): Style? {
+        for (methodName in arrayOf("getTextStyleAt", "getClickedComponentStyleAt")) {
             try {
-                val m = chat.javaClass.getMethod(
-                    "getTextStyleAt",
+                val method = chat.javaClass.getMethod(
+                    methodName,
                     Double::class.javaPrimitiveType,
-                    Double::class.javaPrimitiveType
+                    Double::class.javaPrimitiveType,
                 )
-                m.invoke(chat, mouseX.toDouble(), mouseY.toDouble()) as? Style
+                return method.invoke(chat, mouseX.toDouble(), mouseY.toDouble()) as? Style
             } catch (_: Throwable) {
-                null
+                // try next legacy name
             }
         }
+        return null
     }
 
     private fun resolveImageUrl(style: Style): String? {
