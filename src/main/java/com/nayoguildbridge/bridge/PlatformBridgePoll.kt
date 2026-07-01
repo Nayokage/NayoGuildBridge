@@ -133,7 +133,7 @@ object PlatformBridgePoll {
                         if (ts > lastProcessedPollTs) lastProcessedPollTs = ts
 
                         val formatted = IncomingBridgeFormatter.format(incoming, tag, color)
-                        client.player?.displayClientMessage(formatted, false)
+                        client.player?.sendSystemMessage(formatted)
                     }
                 }
             } catch (t: Throwable) {

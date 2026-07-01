@@ -47,7 +47,7 @@ object BridgePlatformClient {
         while (true) {
             val msg = pendingChat.poll() ?: break
             client.execute {
-                client.player?.displayClientMessage(msg, false)
+                client.player?.sendSystemMessage(msg)
             }
         }
     }

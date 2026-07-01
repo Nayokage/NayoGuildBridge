@@ -74,9 +74,8 @@ object EnvironmentGuard {
 
             if (cfg.requireHypixel && !onHypixel) {
                 operational = false
-                client.player?.displayClientMessage(
-                    Component.literal("§c[NayoGuildBridge] §fМод не работает на данном сервере"),
-                    false
+                client.player?.sendSystemMessage(
+                    Component.literal("§c[NayoGuildBridge] §fМод не работает на данном сервере")
                 )
                 return@execute
             }
@@ -89,11 +88,10 @@ object EnvironmentGuard {
 
                 if (!lastGuildOk) {
                     operational = false
-                    client.player?.displayClientMessage(
+                    client.player?.sendSystemMessage(
                         Component.literal(
                             "§c[NGB] §fПроверка гильдии не пройдена. §7/bridge fix §f— отключить проверку"
-                        ),
-                        false
+                        )
                     )
                     return@execute
                 }

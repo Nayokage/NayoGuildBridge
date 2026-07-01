@@ -1,9 +1,9 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-	id("net.fabricmc.fabric-loom-remap")
+	id("net.fabricmc.fabric-loom")
 	`maven-publish`
-	id("org.jetbrains.kotlin.jvm") version "2.3.10"
+	id("org.jetbrains.kotlin.jvm") version "2.3.20"
 }
 
 version = providers.gradleProperty("mod_version").get()
@@ -16,18 +16,18 @@ base {
 repositories {
 	maven("https://maven.terraformersmc.com/releases/")
 	maven("https://api.modrinth.com/maven")
+	maven("https://maven.isxander.dev/releases")
 }
 
 dependencies {
 	minecraft("com.mojang:minecraft:${providers.gradleProperty("minecraft_version").get()}")
-	mappings(loom.officialMojangMappings())
 
-	modImplementation("net.fabricmc:fabric-loader:${providers.gradleProperty("loader_version").get()}")
-	modImplementation("net.fabricmc.fabric-api:fabric-api:${providers.gradleProperty("fabric_api_version").get()}")
-	modImplementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
+	implementation("net.fabricmc:fabric-loader:${providers.gradleProperty("loader_version").get()}")
+	implementation("net.fabricmc.fabric-api:fabric-api:${providers.gradleProperty("fabric_api_version").get()}")
+	implementation("net.fabricmc:fabric-language-kotlin:${providers.gradleProperty("fabric_kotlin_version").get()}")
 
-	modApi("com.terraformersmc:modmenu:16.0.0")
-	modApi("maven.modrinth:1eAoo2KR:3.8.2+1.21.10-fabric")
+	compileOnly("com.terraformersmc:modmenu:${providers.gradleProperty("modmenu_version").get()}")
+	compileOnly("maven.modrinth:1eAoo2KR:${providers.gradleProperty("yacl_version").get()}")
 
 	implementation("org.java-websocket:Java-WebSocket:1.5.7")
 	include("org.java-websocket:Java-WebSocket:1.5.7")
@@ -45,20 +45,20 @@ tasks.processResources {
 }
 
 tasks.withType<JavaCompile>().configureEach {
-	options.release = 21
+	options.release = 25
 }
 
 kotlin {
 	compilerOptions {
-		jvmTarget = JvmTarget.JVM_21
+		jvmTarget = JvmTarget.JVM_25
 	}
 }
 
 java {
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
 }
 
 tasks.jar {

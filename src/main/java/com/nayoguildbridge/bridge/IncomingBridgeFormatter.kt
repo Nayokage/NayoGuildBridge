@@ -15,6 +15,7 @@ import net.minecraft.network.chat.MutableComponent
 import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.TextColor
 import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.ItemStackTemplate
 
 object IncomingBridgeFormatter {
     data class IncomingMessage(
@@ -417,7 +418,7 @@ object IncomingBridgeFormatter {
         val rgb = legacyColorToRgb(msgColor)
         val qty = if (stack.count > 1) " x${stack.count}" else ""
         val itemName = stack.hoverName.copy()
-            .withStyle(Style.EMPTY.withHoverEvent(HoverEvent.ShowItem(stack)))
+            .withStyle(Style.EMPTY.withHoverEvent(HoverEvent.ShowItem(ItemStackTemplate.fromNonEmptyStack(stack))))
         return Component.empty()
             .append(
                 Component.literal("is holding §8[")

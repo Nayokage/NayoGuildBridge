@@ -20,19 +20,15 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
-import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
+import net.fabricmc.fabric.api.client.command.v2.ClientCommands
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import com.mojang.brigadier.arguments.StringArgumentType
-import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ChatScreen
 import net.minecraft.network.chat.Component
-import org.lwjgl.glfw.GLFW
 
 object NayoGuildBridgeClient : ClientModInitializer {
-    private lateinit var menuKey: KeyMapping
     private var pendingOpenFromCommand: Boolean = false
     private var muteHintShown: Boolean = false
 
@@ -40,40 +36,28 @@ object NayoGuildBridgeClient : ClientModInitializer {
         NayoGuildBridge.logger.info("[NayoGuildBridge] Initializing client entrypoint.")
         ImagePreviewHandler.register()
         EnvironmentGuard.register()
-        menuKey = KeyBindingHelper.registerKeyBinding(
-            KeyMapping(
-                "key.ngb.open_menu",
-                GLFW.GLFW_KEY_RIGHT_SHIFT,
-                KeyMapping.Category.MISC
-            )
-        )
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
             if (!EnvironmentGuard.isOperational()) return@register true
-            if (message.startsWith("/")) return@register true
-
             val cfg = NgbConfig.config
-            if (QuoteConfigManager.quoteSystemEnabled()) {
-                val quote = QuoteDetector.detect(message)
-                if (quote.quoted) {
-                    if (quote.body.isBlank()) return@register false
-                    BridgeRouter.sendQuote(quote)
-                    showLocalQuoteOutgoing(quote)
-                    return@register false
-                }
-            }
-
             if (
                 cfg.imsCombinedBridgeEnabled &&
                 cfg.imsCombinedBridgeChatEnabled &&
-                BridgeRouter.canSendCombined()
+                BridgeRouter.canSendCombined() &&
+                !message.startsWith("/")
             ) {
                 val body = ChatQoL.applyOutgoingBody(message)
                 BridgeRouter.sendCombined(body)
                 showLocalCombinedOutgoing(body)
                 return@register false
             }
-            return@register true
+            if (!QuoteConfigManager.quoteSystemEnabled()) return@register true
+            if (message.startsWith("/")) return@register true
+            val quote = QuoteDetector.detect(message)
+            if (!quote.quoted) return@register true
+            if (quote.body.isBlank()) return@register false
+            BridgeRouter.sendQuote(quote)
+            return@register false
         }
 
         ClientSendMessageEvents.CHAT.register { message ->
@@ -98,10 +82,9 @@ object NayoGuildBridgeClient : ClientModInitializer {
                 is NayoGuildBridge.ChatTransform.Keep -> true
                 is NayoGuildBridge.ChatTransform.Hide -> false
                 is NayoGuildBridge.ChatTransform.Replace -> {
-                    // Game overlay messages are already replaced by MODIFY_GAME; chat packets need injection.
                     val client = Minecraft.getInstance()
                     client.execute {
-                        client.gui.chat.addMessage(transform.component)
+                        client.gui.chat.addClientSystemMessage(transform.component)
                     }
                     false
                 }
@@ -151,9 +134,6 @@ object NayoGuildBridgeClient : ClientModInitializer {
         }
 
         ClientTickEvents.END_CLIENT_TICK.register { client ->
-            while (menuKey.consumeClick()) {
-                client.execute { openConfig(client) }
-            }
             if (pendingOpenFromCommand && client.screen !is ChatScreen) {
                 pendingOpenFromCommand = false
                 client.execute { openConfig(client) }
@@ -173,19 +153,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
         BridgeChatDedupe.remember(BridgeChatDedupe.keyFor(player, body))
         val formatted = IncomingBridgeFormatter.formatLocalOutgoing(player, body, combined = true)
         Minecraft.getInstance().execute {
-            Minecraft.getInstance().player?.displayClientMessage(formatted, false)
-        }
-    }
-
-    private fun showLocalQuoteOutgoing(quote: QuoteDetector.Result) {
-        val player = Minecraft.getInstance().player?.name?.string?.trim().orEmpty()
-        if (player.isBlank() || quote.body.isBlank()) return
-        val cfg = NgbConfig.config
-        val combined = cfg.imsCombinedBridgeEnabled && cfg.imsCombinedBridgeChatEnabled
-        BridgeChatDedupe.remember(BridgeChatDedupe.keyFor(player, quote.body))
-        val formatted = IncomingBridgeFormatter.formatLocalQuoteOutgoing(player, quote, combined)
-        Minecraft.getInstance().execute {
-            Minecraft.getInstance().player?.displayClientMessage(formatted, false)
+            Minecraft.getInstance().player?.sendSystemMessage(formatted)
         }
     }
 
@@ -201,21 +169,20 @@ object NayoGuildBridgeClient : ClientModInitializer {
     private fun maybeShowWebOnlyHint() {
         if (muteHintShown || NgbConfig.config.imsWebOnlyMode) return
         muteHintShown = true
-        Minecraft.getInstance().player?.displayClientMessage(
+        Minecraft.getInstance().player?.sendSystemMessage(
             Component.literal(
                 "§e[NGB] §fНа Hypixel вы в mute. Включите §bimsWebOnlyMode§f в конфиге — bridge через WS + гильд-чат останется."
-            ),
-            false
+            )
         )
     }
 
     private fun registerCommands() {
         ClientCommandRegistrationCallback.EVENT.register { dispatcher, _ ->
-            val bridge = ClientCommandManager.literal("bridge")
+            val bridge = ClientCommands.literal("bridge")
             dispatcher.register(bridge.executes { openConfigFromCommand(it.source) })
             dispatcher.register(
                 bridge
-                    .then(ClientCommandManager.literal("help").executes {
+                    .then(ClientCommands.literal("help").executes {
                         it.source.sendFeedback(
                             Component.literal(
                                 "§9/bridge status|fix|reconnect|toggle|online|show|colour|copy|ignore\n" +
@@ -225,7 +192,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("status").executes {
+                    .then(ClientCommands.literal("status").executes {
                         val poll = if (PlatformBridgePoll.isActive()) "§apoll ON" else "§7poll OFF"
                         val ws = when {
                             !BridgeRouter.isActive() -> "§7ws OFF"
@@ -245,12 +212,12 @@ object NayoGuildBridgeClient : ClientModInitializer {
                                     "§7${com.nayoguildbridge.config.BridgeEndpoints.statusLine()}\n" +
                                     "§7${ImsBridgeClient.statusLine()} §7| ${BridgeHealthCache.statusSuffix()}\n" +
                                     "§7Discord→MC: overlay WS. DS/TG fanout: §fbr1dgebtw§7 (§fdiscordBot:false§7 = норма).\n" +
-                                    "§7Цитаты: §f> [Dis] Nick: | ответ§7 или клик §f[q]§7. CB send: §f/cbridge chat"
+                                    "§7Цитаты: §f> [Discord] Nick: | ответ§7 или клик §f[q]§7. CB send: §f/cbridge chat"
                             )
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("fix").executes {
+                    .then(ClientCommands.literal("fix").executes {
                         NgbConfig.applyWorkingDefaults()
                         it.source.sendFeedback(
                             Component.literal(
@@ -260,12 +227,12 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("reconnect").executes {
+                    .then(ClientCommands.literal("reconnect").executes {
                         ImsBridgeClient.reconnectNow()
                         it.source.sendFeedback(Component.literal("§a[NGB] §fПереподключаю bridge WS..."))
                         1
                     })
-                    .then(ClientCommandManager.literal("toggle").executes {
+                    .then(ClientCommands.literal("toggle").executes {
                         val cfg = NgbConfig.config
                         cfg.imsBridgeEnabled = !cfg.imsBridgeEnabled
                         NgbConfig.save()
@@ -282,11 +249,11 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("online").executes {
+                    .then(ClientCommands.literal("online").executes {
                         ImsBridgeClient.requestOnlinePlayers()
                         1
                     })
-                    .then(ClientCommandManager.literal("copy").executes {
+                    .then(ClientCommands.literal("copy").executes {
                         if (!NgbConfig.config.copyChatEnabled) {
                             it.source.sendFeedback(Component.literal("§c[NGB] §fcopyChat выключен в конфиге."))
                         } else {
@@ -295,7 +262,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         }
                         1
                     })
-                    .then(ClientCommandManager.literal("show").executes {
+                    .then(ClientCommands.literal("show").executes {
                         val stack = Minecraft.getInstance().player?.mainHandItem
                         if (stack == null || stack.isEmpty) {
                             it.source.sendFeedback(Component.literal("§c[NGB] §fНужно держать предмет в руке."))
@@ -306,20 +273,20 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         1
                     })
                     .then(
-                        ClientCommandManager.literal("colour")
+                        ClientCommands.literal("colour")
                             .then(
-                                ClientCommandManager.literal("reset").executes {
+                                ClientCommands.literal("reset").executes {
                                     resetBridgeColours()
                                     it.source.sendFeedback(Component.literal("§a[NGB] §fЦвета bridge сброшены."))
                                     1
                                 }
                             )
                             .then(
-                                ClientCommandManager.argument("prefix", StringArgumentType.word())
+                                ClientCommands.argument("prefix", StringArgumentType.word())
                                     .then(
-                                        ClientCommandManager.argument("name", StringArgumentType.word())
+                                        ClientCommands.argument("name", StringArgumentType.word())
                                             .then(
-                                                ClientCommandManager.argument("message", StringArgumentType.word())
+                                                ClientCommands.argument("message", StringArgumentType.word())
                                                     .executes { ctx ->
                                                         NgbConfig.config.prefixColor = StringArgumentType.getString(ctx, "prefix")
                                                         NgbConfig.config.nameColor = StringArgumentType.getString(ctx, "name")
@@ -335,28 +302,15 @@ object NayoGuildBridgeClient : ClientModInitializer {
                     .then(buildIgnoreCommands())
             )
 
-            dispatcher.register(ClientCommandManager.literal("ngb").executes { openConfigFromCommand(it.source) })
-            dispatcher.register(ClientCommandManager.literal("bridgemenu").executes { openConfigFromCommand(it.source) })
-            dispatcher.register(ClientCommandManager.literal("ngbonline").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
-            dispatcher.register(ClientCommandManager.literal("bl").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
+            dispatcher.register(ClientCommands.literal("ngb").executes { openConfigFromCommand(it.source) })
+            dispatcher.register(ClientCommands.literal("bridgemenu").executes { openConfigFromCommand(it.source) })
+            dispatcher.register(ClientCommands.literal("ngbonline").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
+            dispatcher.register(ClientCommands.literal("bl").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
 
             dispatcher.register(
-                ClientCommandManager.literal("ngbimage")
+                ClientCommands.literal("bc")
                     .then(
-                        ClientCommandManager.literal("open")
-                            .then(
-                                ClientCommandManager.argument("token", StringArgumentType.word()).executes { ctx ->
-                                    ImagePreviewHandler.openPreview(StringArgumentType.getString(ctx, "token"))
-                                    1
-                                }
-                            )
-                    )
-            )
-
-            dispatcher.register(
-                ClientCommandManager.literal("bc")
-                    .then(
-                        ClientCommandManager.argument("message", StringArgumentType.greedyString()).executes { ctx ->
+                        ClientCommands.argument("message", StringArgumentType.greedyString()).executes { ctx ->
                             val msg = StringArgumentType.getString(ctx, "message")
                             BridgeRouter.sendBridgeChat(ChatQoL.applyOutgoingBody(msg))
                             ctx.source.sendFeedback(Component.literal("§a[NGB] §fОтправлено в guild bridge."))
@@ -365,9 +319,9 @@ object NayoGuildBridgeClient : ClientModInitializer {
                     )
             )
             dispatcher.register(
-                ClientCommandManager.literal("cbc")
+                ClientCommands.literal("cbc")
                     .then(
-                        ClientCommandManager.argument("message", StringArgumentType.greedyString()).executes { ctx ->
+                        ClientCommands.argument("message", StringArgumentType.greedyString()).executes { ctx ->
                             val msg = StringArgumentType.getString(ctx, "message")
                             val body = ChatQoL.applyOutgoingBody(msg)
                             BridgeRouter.sendCombined(body)
@@ -379,8 +333,8 @@ object NayoGuildBridgeClient : ClientModInitializer {
             )
 
             dispatcher.register(
-                ClientCommandManager.literal("cbridge")
-                    .then(ClientCommandManager.literal("toggle").executes {
+                ClientCommands.literal("cbridge")
+                    .then(ClientCommands.literal("toggle").executes {
                         NgbConfig.config.imsCombinedBridgeEnabled = !NgbConfig.config.imsCombinedBridgeEnabled
                         NgbConfig.save()
                         it.source.sendFeedback(
@@ -388,7 +342,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("chat").executes {
+                    .then(ClientCommands.literal("chat").executes {
                         NgbConfig.config.imsCombinedBridgeChatEnabled = !NgbConfig.config.imsCombinedBridgeChatEnabled
                         NgbConfig.save()
                         val via = if (NgbConfig.config.imsBridgeEnabled) "WS" else "HTTP"
@@ -399,7 +353,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         )
                         1
                     })
-                    .then(ClientCommandManager.literal("party").executes {
+                    .then(ClientCommands.literal("party").executes {
                         NgbConfig.config.imsPartyBridgeEnabled = !NgbConfig.config.imsPartyBridgeEnabled
                         NgbConfig.save()
                         it.source.sendFeedback(
@@ -410,8 +364,8 @@ object NayoGuildBridgeClient : ClientModInitializer {
             )
 
             dispatcher.register(
-                ClientCommandManager.literal("chat")
-                    .then(ClientCommandManager.literal("b").executes {
+                ClientCommands.literal("chat")
+                    .then(ClientCommands.literal("b").executes {
                         NgbConfig.config.imsCombinedBridgeChatEnabled = true
                         NgbConfig.config.imsCombinedBridgeEnabled = true
                         NgbConfig.save()
@@ -425,12 +379,12 @@ object NayoGuildBridgeClient : ClientModInitializer {
         }
     }
 
-    private fun buildIgnoreCommands() = ClientCommandManager.literal("ignore")
+    private fun buildIgnoreCommands() = ClientCommands.literal("ignore")
         .then(
-            ClientCommandManager.literal("add")
+            ClientCommands.literal("add")
                 .then(
-                    ClientCommandManager.literal("player")
-                        .then(ClientCommandManager.argument("value", StringArgumentType.word()).executes { ctx ->
+                    ClientCommands.literal("player")
+                        .then(ClientCommands.argument("value", StringArgumentType.word()).executes { ctx ->
                             val v = StringArgumentType.getString(ctx, "value")
                             NgbConfig.config.imsIgnorePlayers = (NgbConfig.config.imsIgnorePlayers + v).distinct()
                             NgbConfig.save()
@@ -439,8 +393,8 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         })
                 )
                 .then(
-                    ClientCommandManager.literal("origin")
-                        .then(ClientCommandManager.argument("value", StringArgumentType.word()).executes { ctx ->
+                    ClientCommands.literal("origin")
+                        .then(ClientCommands.argument("value", StringArgumentType.word()).executes { ctx ->
                             val v = StringArgumentType.getString(ctx, "value")
                             NgbConfig.config.imsIgnoreOrigins = (NgbConfig.config.imsIgnoreOrigins + v).distinct()
                             NgbConfig.save()
@@ -450,10 +404,10 @@ object NayoGuildBridgeClient : ClientModInitializer {
                 )
         )
         .then(
-            ClientCommandManager.literal("remove")
+            ClientCommands.literal("remove")
                 .then(
-                    ClientCommandManager.literal("player")
-                        .then(ClientCommandManager.argument("value", StringArgumentType.word()).executes { ctx ->
+                    ClientCommands.literal("player")
+                        .then(ClientCommands.argument("value", StringArgumentType.word()).executes { ctx ->
                             val v = StringArgumentType.getString(ctx, "value")
                             NgbConfig.config.imsIgnorePlayers =
                                 NgbConfig.config.imsIgnorePlayers.filterNot { it.equals(v, true) }
@@ -463,8 +417,8 @@ object NayoGuildBridgeClient : ClientModInitializer {
                         })
                 )
                 .then(
-                    ClientCommandManager.literal("origin")
-                        .then(ClientCommandManager.argument("value", StringArgumentType.word()).executes { ctx ->
+                    ClientCommands.literal("origin")
+                        .then(ClientCommands.argument("value", StringArgumentType.word()).executes { ctx ->
                             val v = StringArgumentType.getString(ctx, "value")
                             NgbConfig.config.imsIgnoreOrigins =
                                 NgbConfig.config.imsIgnoreOrigins.filterNot { it.equals(v, true) }
@@ -475,7 +429,7 @@ object NayoGuildBridgeClient : ClientModInitializer {
                 )
         )
         .then(
-            ClientCommandManager.literal("list").executes { ctx ->
+            ClientCommands.literal("list").executes { ctx ->
                 ctx.source.sendFeedback(
                     Component.literal(
                         "§eИгнор players: ${NgbConfig.config.imsIgnorePlayers.joinToString(", ").ifBlank { "—" }}\n" +
@@ -504,18 +458,16 @@ object NayoGuildBridgeClient : ClientModInitializer {
     private fun openConfig(client: Minecraft) {
         try {
             if (!NayoGuildBridge.hasYacl()) {
-                client.player?.displayClientMessage(
-                    Component.literal("§c[NayoGuildBridge] §fУстановите YACL для меню настроек."),
-                    false
+                client.player?.sendSystemMessage(
+                    Component.literal("§c[NayoGuildBridge] §fУстановите YACL для меню настроек.")
                 )
                 return
             }
             val screen = NgbConfigManager.build(client.screen) ?: return
             client.setScreen(screen)
         } catch (t: Throwable) {
-            client.player?.displayClientMessage(
-                Component.literal("§c[NayoGuildBridge] §fОшибка меню: ${t.message}"),
-                false
+            client.player?.sendSystemMessage(
+                Component.literal("§c[NayoGuildBridge] §fОшибка меню: ${t.message}")
             )
         }
     }

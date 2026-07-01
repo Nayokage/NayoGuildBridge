@@ -13,7 +13,7 @@ import dev.isxander.yacl3.api.controller.TickBoxControllerBuilder
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.Screen
-import net.minecraft.Util
+import net.minecraft.util.Util
 import net.minecraft.network.chat.Component
 
 object NgbConfigManager {
@@ -575,14 +575,54 @@ object NgbConfigManager {
             .options(
                 listOf(
                     linkButton("about.ngb.openGithub", githubUrl),
-                    linkButton("about.ngb.openDiscord", discordUrl)
+                    copyLinkButton("about.ngb.copyGithub", githubUrl),
+                    linkButton("about.ngb.openDiscord", discordUrl),
+                    linkButton("about.ngb.jojobaDiscord", "https://discord.gg/fgWeesWQd6"),
+                    linkButton("about.ngb.squidsDiscord", "https://discord.gg/sbAmzT8VPM"),
+                    linkButton("about.ngb.secretButton", "https://youtu.be/WApeMUANO3s"),
+                    linkButton("about.ngb.waterYoutube", "https://www.youtube.com/@WaterSpais/videos")
                 )
             )
             .build()
 
+        val helpGroup = OptionGroup.createBuilder()
+            .name(NgbLang.component("group.ngb.about.help"))
+            .options(listOf(printInfoButton()))
+            .build()
+
         return ConfigCategory.createBuilder()
             .name(NgbLang.component("category.ngb.about"))
-            .groups(listOf(detailsGroup, linksGroup))
+            .groups(listOf(detailsGroup, linksGroup, helpGroup))
+            .build()
+    }
+
+    private fun printInfoButton(): ButtonOption {
+        return ButtonOption.createBuilder()
+            .name(NgbLang.component("about.ngb.printInfo"))
+            .text(NgbLang.component("about.ngb.printInfoAction"))
+            .action {
+                val player = Minecraft.getInstance().player ?: return@action
+                player.sendSystemMessage(Component.literal("§b[NayoGuildBridge] §fSections:"))
+                player.sendSystemMessage(Component.literal("§7- §fGeneral: enable bridge, markers"))
+                player.sendSystemMessage(Component.literal("§7- §fChat: formatting, nick style, filters"))
+                player.sendSystemMessage(Component.literal("§7- §fAPI: poll, WebSocket, quotes"))
+                player.sendSystemMessage(Component.literal("§7- §fMisc: links, image preview, copy chat"))
+            }
+            .description(OptionDescription.of(NgbLang.component("tooltip.ngb.about.printInfo")))
+            .build()
+    }
+
+    private fun copyLinkButton(nameKey: String, url: String): ButtonOption {
+        return ButtonOption.createBuilder()
+            .name(NgbLang.component(nameKey))
+            .text(NgbLang.component("about.ngb.copy"))
+            .action {
+                Minecraft.getInstance().keyboardHandler.setClipboard(url)
+                Minecraft.getInstance().player?.sendSystemMessage(
+                    Component.literal("§a[NayoGuildBridge] §fGitHub: §b$url")
+                )
+            }
+            .description(OptionDescription.of(Component.literal(url)))
             .build()
     }
 
@@ -712,9 +752,8 @@ object NgbConfigManager {
             if (useRu) "§cвыключено" else "§cOFF"
         }
         Minecraft.getInstance().execute {
-            Minecraft.getInstance().player?.displayClientMessage(
-                Component.literal("§a[NGB] §f$label: $state"),
-                false
+            Minecraft.getInstance().player?.sendSystemMessage(
+                Component.literal("§a[NGB] §f$label: $state")
             )
         }
     }
