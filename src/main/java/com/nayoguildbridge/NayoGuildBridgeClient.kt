@@ -20,19 +20,15 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents
 import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource
 import com.mojang.brigadier.arguments.StringArgumentType
-import net.minecraft.client.KeyMapping
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.screens.ChatScreen
 import net.minecraft.network.chat.Component
-import org.lwjgl.glfw.GLFW
 
 object NayoGuildBridgeClient : ClientModInitializer {
-    private lateinit var menuKey: KeyMapping
     private var pendingOpenFromCommand: Boolean = false
     private var muteHintShown: Boolean = false
 
@@ -40,13 +36,6 @@ object NayoGuildBridgeClient : ClientModInitializer {
         NayoGuildBridge.logger.info("[NayoGuildBridge] Initializing client entrypoint.")
         ImagePreviewHandler.register()
         EnvironmentGuard.register()
-        menuKey = KeyBindingHelper.registerKeyBinding(
-            KeyMapping(
-                "key.ngb.open_menu",
-                GLFW.GLFW_KEY_RIGHT_SHIFT,
-                KeyMapping.Category.MISC
-            )
-        )
 
         ClientSendMessageEvents.ALLOW_CHAT.register { message ->
             if (!EnvironmentGuard.isOperational()) return@register true
@@ -145,9 +134,6 @@ object NayoGuildBridgeClient : ClientModInitializer {
         }
 
         ClientTickEvents.END_CLIENT_TICK.register { client ->
-            while (menuKey.consumeClick()) {
-                client.execute { openConfig(client) }
-            }
             if (pendingOpenFromCommand && client.screen !is ChatScreen) {
                 pendingOpenFromCommand = false
                 client.execute { openConfig(client) }

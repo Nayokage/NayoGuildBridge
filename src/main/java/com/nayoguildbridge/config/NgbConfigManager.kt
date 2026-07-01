@@ -614,14 +614,55 @@ object NgbConfigManager {
             .options(
                 listOf(
                     linkButton("about.ngb.openGithub", githubUrl),
-                    linkButton("about.ngb.openDiscord", discordUrl)
+                    copyLinkButton("about.ngb.copyGithub", githubUrl),
+                    linkButton("about.ngb.openDiscord", discordUrl),
+                    linkButton("about.ngb.jojobaDiscord", "https://discord.gg/fgWeesWQd6"),
+                    linkButton("about.ngb.squidsDiscord", "https://discord.gg/sbAmzT8VPM"),
+                    linkButton("about.ngb.secretButton", "https://youtu.be/WApeMUANO3s"),
+                    linkButton("about.ngb.waterYoutube", "https://www.youtube.com/@WaterSpais/videos")
                 )
             )
             .build()
 
+        val helpGroup = OptionGroup.createBuilder()
+            .name(NgbLang.component("group.ngb.about.help"))
+            .options(listOf(printInfoButton()))
+            .build()
+
         return ConfigCategory.createBuilder()
             .name(NgbLang.component("category.ngb.about"))
-            .groups(listOf(detailsGroup, linksGroup))
+            .groups(listOf(detailsGroup, linksGroup, helpGroup))
+            .build()
+    }
+
+    private fun printInfoButton(): ButtonOption {
+        return ButtonOption.createBuilder()
+            .name(NgbLang.component("about.ngb.printInfo"))
+            .text(NgbLang.component("about.ngb.printInfoAction"))
+            .action {
+                val player = Minecraft.getInstance().player ?: return@action
+                player.displayClientMessage(Component.literal("§b[NayoGuildBridge] §fSections:"), false)
+                player.displayClientMessage(Component.literal("§7- §fGeneral: enable bridge, markers"), false)
+                player.displayClientMessage(Component.literal("§7- §fChat: formatting, nick style, filters"), false)
+                player.displayClientMessage(Component.literal("§7- §fAPI: poll, WebSocket, quotes"), false)
+                player.displayClientMessage(Component.literal("§7- §fMisc: links, image preview, copy chat"), false)
+            }
+            .description(OptionDescription.of(NgbLang.component("tooltip.ngb.about.printInfo")))
+            .build()
+    }
+
+    private fun copyLinkButton(nameKey: String, url: String): ButtonOption {
+        return ButtonOption.createBuilder()
+            .name(NgbLang.component(nameKey))
+            .text(NgbLang.component("about.ngb.copy"))
+            .action {
+                Minecraft.getInstance().keyboardHandler.setClipboard(url)
+                Minecraft.getInstance().player?.displayClientMessage(
+                    Component.literal("§a[NayoGuildBridge] §fGitHub: §b$url"),
+                    false
+                )
+            }
+            .description(OptionDescription.of(Component.literal(url)))
             .build()
     }
 
