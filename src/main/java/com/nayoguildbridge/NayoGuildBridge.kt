@@ -133,7 +133,7 @@ object NayoGuildBridge : ModInitializer {
             }
 
             val (sourceComponent, cleanedText) = if (bracketParsed != null) {
-                buildSourceLabelForId(bracketParsed.sourceId) to bracketParsed.body
+                buildSourceLabelForId(bracketParsed.sourceId, bracketParsed.mcInstance, bracketParsed.guildTag) to bracketParsed.body
             } else {
                 buildSourcePrefixAndStrip(text)
             }
@@ -170,7 +170,7 @@ object NayoGuildBridge : ModInitializer {
                 isOfficerChannel -> Component.literal("[Officer] ")
                     .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(config.officerPrefixColor.toColor())))
                 sourceComponent.string.isNotBlank() -> sourceComponent
-                else -> buildSourceLabelForId(sourceIdFromBody)
+                else -> buildSourceLabelForId(sourceIdFromBody, bracketParsed?.mcInstance, bracketParsed?.guildTag)
             }
             val displayNameRaw = when {
                 isReplyLike -> senderNick
@@ -234,33 +234,83 @@ object NayoGuildBridge : ModInitializer {
         return ChatTransform.Keep
     }
 
-    private data class BracketSource(val sourceId: String, val nick: String, val body: String)
+    private data class BracketSource(
+        val sourceId: String,
+        val nick: String,
+        val body: String,
+        val mcInstance: String? = null,
+        val guildTag: String? = null,
+    )
 
     private fun parseBracketSourceLine(raw: String): BracketSource? {
         val s = raw.trimStart()
+        BridgeSourceTags.parseMcInstanceLine(s)?.let { line ->
+            val rest = Regex("""^([^:→>]{1,64})(?:[→>]([^:]{1,64}))?\s*:\s*(.+)$""").find(line.rest.trim()) ?: return@let null
+            val sender = rest.groupValues[1].trim().removePrefix(".")
+            val target = rest.groupValues[2].trim()
+            val reply = rest.groupValues[3].trim()
+            val body = if (target.isNotEmpty()) {
+                "> [Minecraft] $target: | $reply"
+            } else {
+                reply
+            }
+            return BracketSource("minecraft", sender, body, line.instance, line.guildTag)
+        }
         if (s.startsWith(BridgeSourceTags.MINECRAFT_MARKER)) {
             val rest = s.removePrefix(BridgeSourceTags.MINECRAFT_MARKER).trimStart()
             val dot = Regex("""^([^:→>]{1,64})(?:[→>]([^:]{1,64}))?\s*:\s*(.+)$""").find(rest) ?: return null
-            return BracketSource("minecraft", dot.groupValues[1].trim(), dot.groupValues[3].trim())
+            val sender = dot.groupValues[1].trim()
+            val target = dot.groupValues[2].trim()
+            val reply = dot.groupValues[3].trim()
+            val body = if (target.isNotEmpty()) {
+                "> [Minecraft] $target: | $reply"
+            } else {
+                reply
+            }
+            return BracketSource("minecraft", sender, body)
         }
         val m = BRACKET_SOURCE.matcher(s)
         if (!m.matches()) return null
-        val sourceId = BridgeSourceTags.normalizeSourceId(m.group(1).trim())
-        val nick = m.group(2).trim()
+        val rawTag = m.group(1).trim()
+        val mcPipe = Regex("""^Minecraft\|([^|\]]+)(?:\|(.+))?$""", RegexOption.IGNORE_CASE).find(rawTag)
+        if (mcPipe != null) {
+            return BracketSource(
+                "minecraft",
+                m.group(2).trim().removePrefix("."),
+                m.group(3).trim(),
+                mcPipe.groupValues[1].trim(),
+                mcPipe.groupValues[2].trim().ifBlank { null },
+            )
+        }
+        val sourceId = BridgeSourceTags.normalizeSourceId(rawTag)
+        val mcInstance = when {
+            sourceId == "minecraft" || sourceId == "mc" -> null
+            sourceId == "telegram" || sourceId == "tg" -> null
+            isDiscordSource(sourceId) -> null
+            else -> rawTag
+        }
+        val effectiveSource = if (mcInstance != null) "minecraft" else sourceId
+        val nick = m.group(2).trim().removePrefix(".")
         val body = m.group(3).trim()
-        return BracketSource(sourceId, nick, body)
+        return BracketSource(effectiveSource, nick, body, mcInstance)
     }
 
     private fun isDiscordSource(sourceId: String): Boolean = BridgeSourceTags.isDiscordSource(sourceId)
 
-    private fun buildSourceLabelForId(sourceId: String): Component {
+    private fun buildSourceLabelForId(
+        sourceId: String,
+        mcInstance: String? = null,
+        guildTag: String? = null,
+    ): Component {
         val lower = sourceId.lowercase()
         val (label, colorHex) = when {
             lower == "telegram" || lower == "tg" -> BridgeSourceTags.TELEGRAM_DISPLAY to config.telegramLabelColor
-            lower == "minecraft" || lower == "mc" -> BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
+            lower == "minecraft" || lower == "mc" ->
+                BridgeSourceTags.mcInstanceDisplayLabel(mcInstance, guildTag) to config.minecraftLabelColor
             isDiscordSource(sourceId) -> BridgeSourceTags.DISCORD_DISPLAY to config.discordLabelColor
-            sourceId.isNotBlank() -> "[$sourceId] " to config.minecraftLabelColor
-            else -> BridgeSourceTags.MINECRAFT_DISPLAY to config.minecraftLabelColor
+            sourceId.isNotBlank() ->
+                BridgeSourceTags.mcInstanceDisplayLabel(mcInstance ?: sourceId, guildTag) to config.minecraftLabelColor
+            else -> BridgeSourceTags.mcInstanceDisplayLabel(mcInstance, guildTag) to config.minecraftLabelColor
         }
         return Component.literal(label)
             .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(colorHex))))
@@ -433,11 +483,34 @@ object NayoGuildBridge : ModInitializer {
                 BridgeSourceTags.DISCORD_DISPLAY to config.discordLabelColor
             }
             else -> {
+                BridgeSourceTags.parseMcInstanceLine(body)?.let { line ->
+                    body = line.rest
+                    return buildSourceLabelForId("minecraft", line.instance, line.guildTag) to body
+                }
                 val bracket = BRACKET_SOURCE.matcher(body)
                 if (bracket.matches()) {
-                    val sourceId = BridgeSourceTags.normalizeSourceId(bracket.group(1).trim())
+                    val rawTag = bracket.group(1).trim()
+                    val mcPipe = Regex("""^Minecraft\|([^|\]]+)(?:\|(.+))?$""", RegexOption.IGNORE_CASE).find(rawTag)
+                    if (mcPipe != null) {
+                        body = bracket.group(3).trim()
+                        return buildSourceLabelForId(
+                            "minecraft",
+                            mcPipe.groupValues[1].trim(),
+                            mcPipe.groupValues[2].trim().ifBlank { null },
+                        ) to body
+                    }
+                    val sourceId = BridgeSourceTags.normalizeSourceId(rawTag)
+                    val mcInstance = when {
+                        sourceId == "minecraft" || sourceId == "mc" -> null
+                        sourceId == "telegram" || sourceId == "tg" -> null
+                        isDiscordSource(sourceId) -> null
+                        else -> rawTag
+                    }
                     body = bracket.group(3).trim()
-                    return buildSourceLabelForId(sourceId) to body
+                    return buildSourceLabelForId(
+                        if (mcInstance != null) "minecraft" else sourceId,
+                        mcInstance,
+                    ) to body
                 }
                 return Component.empty() to body
             }
@@ -452,6 +525,7 @@ object NayoGuildBridge : ModInitializer {
         val body = rawBody.trimStart()
         return when {
             body.startsWith(BridgeSourceTags.TELEGRAM_MARKER) -> "telegram"
+            BridgeSourceTags.parseMcInstanceLine(body) != null -> "minecraft"
             body.startsWith(BridgeSourceTags.MINECRAFT_MARKER) -> "minecraft"
             body.startsWith(BridgeSourceTags.TELEGRAM_DISPLAY.trimStart()) -> "telegram"
             body.startsWith(BridgeSourceTags.MINECRAFT_DISPLAY.trimStart()) -> "minecraft"

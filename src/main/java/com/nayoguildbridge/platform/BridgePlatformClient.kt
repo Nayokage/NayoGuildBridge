@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.nayoguildbridge.NayoGuildBridge
 import com.nayoguildbridge.config.NgbConfig
+import com.nayoguildbridge.util.InstanceNameResolver
 import net.minecraft.client.Minecraft
 import net.minecraft.network.chat.Component
 import org.java_websocket.client.WebSocketClient
@@ -155,6 +156,19 @@ object BridgePlatformClient {
                 when (root.get("type")?.asString) {
                     "auth.ok" -> {
                         BridgePlatformClient.connected = true
+                        val label = root.get("label")?.asString?.trim()?.ifBlank { null }
+                            ?: root.getAsJsonArray("instances")?.let { arr ->
+                                val selfId = root.get("instanceId")?.asString
+                                if (selfId.isNullOrBlank()) return@let null
+                                for (i in 0 until arr.size()) {
+                                    val obj = arr[i].asJsonObject
+                                    if (obj.get("id")?.asString == selfId) {
+                                        return@let obj.get("label")?.asString?.trim()?.ifBlank { null }
+                                    }
+                                }
+                                null
+                            }
+                        InstanceNameResolver.setPlatformLabel(label)
                         NayoGuildBridge.logger.info("[NayoGuildBridge] Platform bridge connected.")
                     }
                     "auth.error" -> {
@@ -175,6 +189,7 @@ object BridgePlatformClient {
         override fun onClose(code: Int, reason: String?, remote: Boolean) {
             BridgePlatformClient.connected = false
             BridgePlatformClient.ws = null
+            InstanceNameResolver.setPlatformLabel(null)
         }
 
         override fun onError(ex: Exception?) {

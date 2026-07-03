@@ -122,7 +122,8 @@ object PlatformBridgePoll {
                         }
 
                         val mode = obj.get("mode")?.asString ?: "chat"
-                        val incoming = IncomingBridgeFormatter.fromPollText(text, mode) ?: continue
+                        val fromInstance = obj.get("fromInstanceId")?.asString?.trim()?.ifBlank { null }
+                        val incoming = IncomingBridgeFormatter.fromPollText(text, mode, fromInstance) ?: continue
                         if (!cfg.bridgePollDisplayInChat) continue
                         if (!BridgeChatDedupe.claimDisplay(incoming.username, incoming.body)) continue
 

@@ -26,6 +26,8 @@ data class Config(
     var bridgePollOnlyWhenWsOffline: Boolean = true,
     var bridgePollChannelId: String = "default",
     var bridgePollMs: Int = 1500,
+    /** Ручное имя инстанса (override). Пусто = авто: platform label → папка лаунчера → «minecraft». */
+    var mcInstanceName: String = "",
 
     var platformBridgeEnabled: Boolean = false,
     var platformApiUrl: String = "http://127.0.0.1:4000",

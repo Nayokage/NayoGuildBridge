@@ -50,7 +50,7 @@ object ApiClient {
             addProperty("message_id", messageId)
             addProperty("source", "minecraft")
             addProperty("source_mod", SOURCE_MOD)
-            addProperty("originInstance", PlayerIdentity.originInstance(client))
+            addProperty("originInstance", PlayerIdentity.mcInstanceName(client))
             addProperty("username", player.name.string)
             addProperty("message", replyBody)
             addProperty("body", replyBody)

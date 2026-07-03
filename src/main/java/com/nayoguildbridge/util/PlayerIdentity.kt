@@ -26,4 +26,7 @@ object PlayerIdentity {
         if (server.isNotBlank()) return server
         return instanceId(client)
     }
+
+    fun mcInstanceName(client: Minecraft = Minecraft.getInstance()): String =
+        InstanceNameResolver.resolve()
 }

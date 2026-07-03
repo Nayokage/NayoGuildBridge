@@ -108,6 +108,18 @@ object QuoteDetector {
             if (right.isNotEmpty()) {
                 val quoteRaw = left.removePrefix(">").trimStart()
                 if (quoteRaw.isNotEmpty()) {
+                    val headerOnly = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*$""").find(quoteRaw)
+                    if (headerOnly != null) {
+                        val replyText = cleanIncomingMessageLine(right)
+                        if (replyText.isNotBlank()) {
+                            return IncomingQuote(
+                                quotedText = "—",
+                                replyText = replyText,
+                                quotedFromInstance = headerOnly.groupValues[1].trim(),
+                                quotedFromUser = headerOnly.groupValues[2].trim(),
+                            )
+                        }
+                    }
                     val parsed = parseQuotedLine(quoteRaw)
                     val quotedText = parsed.third?.takeIf { it.isNotBlank() } ?: quoteRaw
                     val replyText = cleanIncomingMessageLine(right)

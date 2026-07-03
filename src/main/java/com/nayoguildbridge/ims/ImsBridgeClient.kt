@@ -6,6 +6,7 @@ import com.nayoguildbridge.NayoGuildBridge
 import com.nayoguildbridge.config.BridgeEndpoints
 import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.util.BridgeTextUtil
+import com.nayoguildbridge.util.PlayerIdentity
 import com.nayoguildbridge.quote.QuoteDetector
 import com.nayoguildbridge.util.ItemStackJson
 import net.minecraft.client.Minecraft
@@ -104,9 +105,11 @@ object ImsBridgeClient {
 
     fun sendGuildMessage(rawContent: String) {
         if (!canSend()) return
+        val client = Minecraft.getInstance()
         val payload = JsonObject().apply {
             addProperty("from", "mc")
             addProperty("msg", rawContent)
+            addProperty("originInstance", PlayerIdentity.mcInstanceName(client))
         }
         ws?.send(payload.toString())
     }
@@ -133,10 +136,12 @@ object ImsBridgeClient {
 
     fun sendCombinedMessage(text: String) {
         if (!canSend()) return
+        val client = Minecraft.getInstance()
         val payload = JsonObject().apply {
             addProperty("from", "mc")
             addProperty("msg", text)
             addProperty("combinedbridge", "true")
+            addProperty("originInstance", PlayerIdentity.mcInstanceName(client))
         }
         ws?.send(payload.toString())
     }

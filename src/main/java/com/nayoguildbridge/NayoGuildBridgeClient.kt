@@ -308,6 +308,19 @@ object NayoGuildBridgeClient : ClientModInitializer {
             dispatcher.register(ClientCommands.literal("bl").executes { ImsBridgeClient.requestOnlinePlayers(); 1 })
 
             dispatcher.register(
+                ClientCommands.literal("ngbimage")
+                    .then(
+                        ClientCommands.literal("open")
+                            .then(
+                                ClientCommands.argument("token", StringArgumentType.word()).executes { ctx ->
+                                    ImagePreviewHandler.openPreview(StringArgumentType.getString(ctx, "token"))
+                                    1
+                                }
+                            )
+                    )
+            )
+
+            dispatcher.register(
                 ClientCommands.literal("bc")
                     .then(
                         ClientCommands.argument("message", StringArgumentType.greedyString()).executes { ctx ->

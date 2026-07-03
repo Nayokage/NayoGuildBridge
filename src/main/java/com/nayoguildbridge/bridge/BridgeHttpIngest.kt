@@ -65,6 +65,7 @@ object BridgeHttpIngest {
         val client = Minecraft.getInstance()
         val playerKey = PlayerIdentity.playerName(client).ifBlank { author }
         val instanceId = PlayerIdentity.instanceId(client)
+        val originInstance = PlayerIdentity.mcInstanceName(client)
         val channelId = cfg.bridgePollChannelId.ifEmpty { "default" }
 
         val body = JsonObject().apply {
@@ -74,6 +75,7 @@ object BridgeHttpIngest {
             addProperty("text", text)
             addProperty("source", "minecraft")
             addProperty("instanceId", instanceId)
+            addProperty("originInstance", originInstance)
             addProperty("ts", System.currentTimeMillis())
             if (combinedBridge) addProperty("combinedBridge", true)
             if (show) addProperty("show", true)

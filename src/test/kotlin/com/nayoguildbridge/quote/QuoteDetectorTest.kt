@@ -34,11 +34,20 @@ class QuoteDetectorTest {
     }
 
     @Test
-    fun parsesPipeQuoteWithoutLeadingArrow() {
-        val quote = QuoteDetector.parseIncomingQuote("[Dis] Traktorist: кря | Проверка")
-        assertEquals("кря", quote?.quotedText)
-        assertEquals("Проверка", quote?.replyText)
+    fun parsesMinecraftPipeQuoteWithoutPreviewText() {
+        val quote = QuoteDetector.parseIncomingQuote("> [Minecraft] Traktorist: | угу")
+        assertEquals("—", quote?.quotedText)
+        assertEquals("угу", quote?.replyText)
         assertEquals("Traktorist", quote?.quotedFromUser)
-        assertEquals("Dis", quote?.quotedFromInstance)
+        assertEquals("Minecraft", quote?.quotedFromInstance)
+    }
+
+    @Test
+    fun parsesMinecraftPipeQuoteWithPreviewText() {
+        val quote = QuoteDetector.parseIncomingQuote("> [Minecraft] timurproooo: hello | reply text")
+        assertEquals("hello", quote?.quotedText)
+        assertEquals("reply text", quote?.replyText)
+        assertEquals("timurproooo", quote?.quotedFromUser)
+        assertEquals("Minecraft", quote?.quotedFromInstance)
     }
 }

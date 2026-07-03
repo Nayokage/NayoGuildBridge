@@ -27,6 +27,9 @@ object IncomingBridgeFormatter {
         val quotedText: String? = null,
         val quotedFromUser: String? = null,
         val quotedSource: String? = null,
+        val mcInstance: String? = null,
+        val remoteGuildTag: String? = null,
+        val remoteGuildColor: String? = null,
         val imageUrls: List<String> = emptyList(),
         val isCommand: Boolean = false,
         val hasJsonStack: Boolean = false,
@@ -41,21 +44,33 @@ object IncomingBridgeFormatter {
         val stackRaw = if (hasStack) root.get("jsonStack").toString() else null
 
         val parsed = parseSourceLine(msg.trim())
-        val (source, username, body) = if (parsed != null) {
-            parsed
+        val source: String
+        val username: String
+        val body: String
+        val parsedInstance: String?
+        val parsedGuildTag: String?
+        if (parsed != null) {
+            source = parsed.source
+            username = parsed.username
+            body = parsed.body
+            parsedInstance = parsed.mcInstance
+            parsedGuildTag = parsed.remoteGuildTag
         } else {
             val parts = msg.split(": ", limit = 2)
-            Triple(
-                normalizeSourceId(fromField),
-                parts.getOrNull(0)?.trim()?.ifBlank { "?" } ?: "?",
-                parts.getOrNull(1)?.trim()?.ifBlank { msg } ?: msg
-            )
+            source = normalizeSourceId(fromField)
+            username = parts.getOrNull(0)?.trim()?.ifBlank { "?" } ?: "?"
+            body = parts.getOrNull(1)?.trim()?.ifBlank { msg } ?: msg
+            parsedInstance = null
+            parsedGuildTag = null
         }
 
         val quoted = root.get("quoted")?.asString == "true" || root.get("quoted")?.asBoolean == true
         val quotedText = firstString(root, "quotedText", "quotedMessage", "replyToPreview")
             ?.let { QuoteDetector.cleanIncomingQuoteText(it) }
         val quotedFromUser = firstString(root, "quotedFromUser", "replyToUser")
+        val mcInstance = firstString(root, "originInstance", "mcInstance", "fromInstanceId") ?: parsedInstance
+        val remoteGuildTag = firstString(root, "guildTag", "guild") ?: parsedGuildTag
+        val remoteGuildColor = firstString(root, "guildColor")
         val isCommand = root.get("isCommand")?.asString == "true" || root.get("isCommand")?.asBoolean == true
 
         val images = mutableListOf<String>()
@@ -75,6 +90,9 @@ object IncomingBridgeFormatter {
             quoted = quoted,
             quotedText = quotedText,
             quotedFromUser = quotedFromUser,
+            mcInstance = mcInstance,
+            remoteGuildTag = remoteGuildTag,
+            remoteGuildColor = remoteGuildColor,
             imageUrls = images,
             isCommand = isCommand,
             hasJsonStack = hasStack,
@@ -82,7 +100,7 @@ object IncomingBridgeFormatter {
         )
     }
 
-    fun fromPollText(text: String, mode: String): IncomingMessage? {
+    fun fromPollText(text: String, mode: String, mcInstance: String? = null): IncomingMessage? {
         val raw = text.trim()
         if (raw.isBlank()) return null
 
@@ -133,13 +151,15 @@ object IncomingBridgeFormatter {
             val replyPart = quoteInline.groupValues[4].trim()
             val replyParsed = parseSourceLine(replyPart) ?: return null
             return IncomingMessage(
-                source = replyParsed.first,
-                username = replyParsed.second,
-                body = replyParsed.third,
+                source = replyParsed.source,
+                username = replyParsed.username,
+                body = replyParsed.body,
                 quoted = true,
                 quotedText = quotedBody,
                 quotedFromUser = quotedUser,
-                imageUrls = ChatQoL.extractImageUrls(replyParsed.third)
+                mcInstance = replyParsed.mcInstance,
+                remoteGuildTag = replyParsed.remoteGuildTag,
+                imageUrls = ChatQoL.extractImageUrls(replyParsed.body)
             )
         }
 
@@ -147,19 +167,21 @@ object IncomingBridgeFormatter {
             source = "minecraft",
             username = "?",
             body = raw,
+            mcInstance = mcInstance,
             imageUrls = ChatQoL.extractImageUrls(raw)
         )
 
-        val (source, user, body) = parsed
-        val quote = QuoteDetector.parseIncomingQuote(body)
+        val quote = QuoteDetector.parseIncomingQuote(parsed.body)
         return IncomingMessage(
-            source = source,
-            username = user,
-            body = quote?.replyText ?: body,
+            source = parsed.source,
+            username = parsed.username,
+            body = quote?.replyText ?: parsed.body,
             quoted = quote != null,
             quotedText = quote?.quotedText,
-            quotedFromUser = quote?.quotedFromUser ?: user,
-            imageUrls = ChatQoL.extractImageUrls(body)
+            quotedFromUser = quote?.quotedFromUser ?: parsed.username,
+            mcInstance = parsed.mcInstance ?: mcInstance,
+            remoteGuildTag = parsed.remoteGuildTag,
+            imageUrls = ChatQoL.extractImageUrls(parsed.body)
         )
     }
 
@@ -216,7 +238,7 @@ object IncomingBridgeFormatter {
         val bodyText = ChatQoL.applyIncomingBody(msg.body)
 
         val out = Component.empty()
-            .append(sourceLabelComponent(msg.source))
+            .append(sourceLabelComponent(msg.source, msg.mcInstance))
             .append(
                 Component.literal(msg.username)
                     .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameRgb)))
@@ -274,7 +296,7 @@ object IncomingBridgeFormatter {
         }
 
         val out = Component.empty()
-            .append(sourceLabelComponent(msg.source))
+            .append(sourceLabelComponent(msg.source, msg.mcInstance, msg.remoteGuildTag))
             .append(
                 com.nayoguildbridge.bridge.ExternalGiBadgeRegistry.appendBadgePrefix(
                     msg.username,
@@ -298,12 +320,12 @@ object IncomingBridgeFormatter {
         val tag = when {
             msg.source == "discord" -> "DISC"
             msg.source == "telegram" -> cfg.imsGuildTag.ifBlank { "TG" }
-            else -> defaultTag.ifBlank { "BR" }
+            else -> resolvePeerGuildTag(msg, defaultTag)
         }
         val nameColorRgb = when {
             msg.source == "discord" -> 0x5555FF
             msg.source == "telegram" -> 0x55FFFF
-            else -> legacyColorToRgb(defaultColor.ifBlank { "§a" })
+            else -> resolvePeerNameColor(msg, defaultColor)
         }
 
         val prefix = cfg.imsCombinedPrefix
@@ -311,7 +333,7 @@ object IncomingBridgeFormatter {
 
         val header = Component.empty()
             .append(parseLegacyColoredText(prefix))
-            .append(sourceLabelComponent(msg.source))
+            .append(sourceLabelComponent(msg.source, msg.mcInstance, msg.remoteGuildTag))
             .append(
                 Component.literal(msg.username)
                     .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameColorRgb)))
@@ -343,14 +365,14 @@ object IncomingBridgeFormatter {
 
     private fun formatImsPeer(msg: IncomingMessage, defaultTag: String, defaultColor: String): Component {
         val cfg = NgbConfig.config
-        val tag = defaultTag.ifBlank { "BR" }
-        val nameColorRgb = legacyColorToRgb(defaultColor.ifBlank { "§a" })
+        val tag = resolvePeerGuildTag(msg, defaultTag)
+        val nameColorRgb = resolvePeerNameColor(msg, defaultColor)
         val prefix = cfg.imsBridgePrefix
         val msgColor = cfg.imsBridgeMessageColor
 
         val header = Component.empty()
             .append(parseLegacyColoredText(prefix))
-            .append(sourceLabelComponent(msg.source))
+            .append(sourceLabelComponent(msg.source, msg.mcInstance, msg.remoteGuildTag))
             .append(
                 Component.literal(msg.username)
                     .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(nameColorRgb)))
@@ -378,6 +400,15 @@ object IncomingBridgeFormatter {
 
         appendExtras(out, msg, stack, msg.source)
         return out
+    }
+
+    private fun resolvePeerGuildTag(msg: IncomingMessage, defaultTag: String): String {
+        return msg.remoteGuildTag?.trim()?.takeIf { it.isNotBlank() } ?: defaultTag.ifBlank { "BR" }
+    }
+
+    private fun resolvePeerNameColor(msg: IncomingMessage, defaultColor: String): Int {
+        val remote = msg.remoteGuildColor?.trim()?.takeIf { it.isNotBlank() }
+        return if (remote != null) legacyColorToRgb(remote) else legacyColorToRgb(defaultColor.ifBlank { "§a" })
     }
 
     private fun appendExtras(
@@ -475,25 +506,74 @@ object IncomingBridgeFormatter {
             )
     }
 
-    private fun sourceLabelComponent(source: String): Component {
+    private data class ParsedSourceLine(
+        val source: String,
+        val username: String,
+        val body: String,
+        val mcInstance: String? = null,
+        val remoteGuildTag: String? = null,
+    )
+
+    private fun sourceLabelComponent(
+        source: String,
+        mcInstance: String? = null,
+        guildTag: String? = null,
+    ): Component {
         val cfg = NgbConfig.config
         val lower = source.lowercase()
         val (label, colorHex) = when {
             lower == "telegram" || lower == "tg" -> BridgeSourceTags.TELEGRAM_DISPLAY to cfg.telegramLabelColor
-            lower == "mc" || lower == "minecraft" -> BridgeSourceTags.MINECRAFT_DISPLAY to cfg.minecraftLabelColor
+            lower == "mc" || lower == "minecraft" ->
+                BridgeSourceTags.mcInstanceDisplayLabel(mcInstance, guildTag) to cfg.minecraftLabelColor
             lower == "command" -> "[CMD] " to "#FFAA00"
             BridgeSourceTags.isDiscordSource(source) -> BridgeSourceTags.DISCORD_DISPLAY to cfg.discordLabelColor
-            source.isNotBlank() -> "[$source] " to cfg.minecraftLabelColor
-            else -> BridgeSourceTags.MINECRAFT_DISPLAY to cfg.minecraftLabelColor
+            source.isNotBlank() ->
+                BridgeSourceTags.mcInstanceDisplayLabel(mcInstance ?: source, guildTag) to cfg.minecraftLabelColor
+            else -> BridgeSourceTags.mcInstanceDisplayLabel(mcInstance, guildTag) to cfg.minecraftLabelColor
         }
         return Component.literal(label)
             .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(Integer.decode(colorHex))))
     }
 
-    private fun parseSourceLine(line: String): Triple<String, String, String>? {
-        val m = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""").find(line.trim()) ?: return null
-        val source = BridgeSourceTags.normalizeSourceId(m.groupValues[1])
-        return Triple(source, m.groupValues[2].trim(), m.groupValues[3].trim())
+    private fun parseSourceLine(line: String): ParsedSourceLine? {
+        val trimmed = line.trim()
+        BridgeSourceTags.parseMcInstanceLine(trimmed)?.let { line ->
+            val inner = Regex("""^([^:]{1,64}):\s*(.+)$""").find(line.rest) ?: return@let null
+            return ParsedSourceLine(
+                "minecraft",
+                inner.groupValues[1].trim(),
+                inner.groupValues[2].trim(),
+                line.instance,
+                line.guildTag,
+            )
+        }
+        val m = Regex("""^\[([^\]]+)]\s+([^:]{1,64}):\s*(.+)$""").find(trimmed) ?: return null
+        val rawTag = m.groupValues[1].trim()
+        val mcPipe = Regex("""^Minecraft\|([^|\]]+)(?:\|(.+))?$""", RegexOption.IGNORE_CASE).find(rawTag)
+        if (mcPipe != null) {
+            return ParsedSourceLine(
+                "minecraft",
+                m.groupValues[2].trim(),
+                m.groupValues[3].trim(),
+                mcPipe.groupValues[1].trim(),
+                mcPipe.groupValues[2].trim().ifBlank { null },
+            )
+        }
+        val source = BridgeSourceTags.normalizeSourceId(rawTag)
+        val mcInstance = when {
+            source == "minecraft" || source == "mc" -> null
+            source == "telegram" || source == "tg" -> null
+            BridgeSourceTags.isDiscordSource(source) -> null
+            else -> rawTag
+        }
+        val effectiveSource = if (mcInstance != null) "minecraft" else source
+        return ParsedSourceLine(
+            effectiveSource,
+            m.groupValues[2].trim(),
+            m.groupValues[3].trim(),
+            mcInstance,
+            null,
+        )
     }
 
     private fun firstString(root: JsonObject, vararg names: String): String? {
@@ -516,24 +596,26 @@ object IncomingBridgeFormatter {
         val arrow = Regex("""^\.?([^→>]{1,64})[→>]\s*([^:]{1,64}):\s*(.+)$""").find(replyLine)
         if (arrow != null) {
             return IncomingMessage(
-                source = normalizeSourceId(quoteParsed.first),
+                source = normalizeSourceId(quoteParsed.source),
                 username = arrow.groupValues[1].trim(),
                 body = arrow.groupValues[3].trim(),
                 quoted = true,
-                quotedText = quoteParsed.third,
-                quotedFromUser = quoteParsed.second,
+                quotedText = quoteParsed.body,
+                quotedFromUser = quoteParsed.username,
+                mcInstance = quoteParsed.mcInstance,
                 imageUrls = ChatQoL.extractImageUrls(arrow.groupValues[3])
             )
         }
         val replyParsed = parseSourceLine(replyLine) ?: return null
         return IncomingMessage(
-            source = replyParsed.first,
-            username = replyParsed.second,
-            body = replyParsed.third,
+            source = replyParsed.source,
+            username = replyParsed.username,
+            body = replyParsed.body,
             quoted = true,
-            quotedText = quoteParsed.third,
-            quotedFromUser = quoteParsed.second,
-            imageUrls = ChatQoL.extractImageUrls(replyParsed.third)
+            quotedText = quoteParsed.body,
+            quotedFromUser = quoteParsed.username,
+            mcInstance = replyParsed.mcInstance ?: quoteParsed.mcInstance,
+            imageUrls = ChatQoL.extractImageUrls(replyParsed.body)
         )
     }
 

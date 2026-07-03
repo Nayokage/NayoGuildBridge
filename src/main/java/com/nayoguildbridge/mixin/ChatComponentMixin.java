@@ -14,7 +14,7 @@ public class ChatComponentMixin {
         ngb$cancelIfUnlimited(ci);
     }
 
-    @Inject(method = "removeTrimmedMessages", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "removeTrimmedMessages", at = @At("HEAD"), cancellable = true, require = 0)
     private void ngb$unlimitedChatRemove(CallbackInfo ci) {
         ngb$cancelIfUnlimited(ci);
     }
