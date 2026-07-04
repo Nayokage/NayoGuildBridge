@@ -9,6 +9,7 @@ import com.nayoguildbridge.util.ItemStackJson
 import com.nayoguildbridge.qol.ChatQoL
 import com.nayoguildbridge.quote.QuoteDetector
 import com.nayoguildbridge.quote.QuoteDisplay
+import com.nayoguildbridge.quote.QuoteContextRegistry
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
 import net.minecraft.network.chat.MutableComponent
@@ -30,6 +31,11 @@ object IncomingBridgeFormatter {
         val mcInstance: String? = null,
         val remoteGuildTag: String? = null,
         val remoteGuildColor: String? = null,
+        val remoteGuildId: String? = null,
+        val remoteGuildName: String? = null,
+        val originalGuildId: String? = null,
+        val originalGuildName: String? = null,
+        val isCrossGuildQuote: Boolean = false,
         val imageUrls: List<String> = emptyList(),
         val isCommand: Boolean = false,
         val hasJsonStack: Boolean = false,
@@ -71,6 +77,11 @@ object IncomingBridgeFormatter {
         val mcInstance = firstString(root, "originInstance", "mcInstance", "fromInstanceId") ?: parsedInstance
         val remoteGuildTag = firstString(root, "guildTag", "guild") ?: parsedGuildTag
         val remoteGuildColor = firstString(root, "guildColor")
+        val remoteGuildId = firstString(root, "guildId")
+        val remoteGuildName = firstString(root, "guildName")
+        val originalGuildId = firstString(root, "originalGuildId") ?: remoteGuildId
+        val originalGuildName = firstString(root, "originalGuildName", "guildName") ?: remoteGuildName
+        val isCrossGuildQuote = parseBoolField(root, "isCrossGuildQuote")
         val isCommand = root.get("isCommand")?.asString == "true" || root.get("isCommand")?.asBoolean == true
 
         val images = mutableListOf<String>()
@@ -93,6 +104,11 @@ object IncomingBridgeFormatter {
             mcInstance = mcInstance,
             remoteGuildTag = remoteGuildTag,
             remoteGuildColor = remoteGuildColor,
+            remoteGuildId = remoteGuildId,
+            remoteGuildName = remoteGuildName,
+            originalGuildId = originalGuildId,
+            originalGuildName = originalGuildName,
+            isCrossGuildQuote = isCrossGuildQuote,
             imageUrls = images,
             isCommand = isCommand,
             hasJsonStack = hasStack,
@@ -100,7 +116,15 @@ object IncomingBridgeFormatter {
         )
     }
 
-    fun fromPollText(text: String, mode: String, mcInstance: String? = null): IncomingMessage? {
+    fun fromPollText(text: String, mode: String, mcInstance: String? = null, meta: JsonObject? = null): IncomingMessage? {
+        val raw = text.trim()
+        if (raw.isBlank()) return null
+
+        val parsed = fromPollTextInner(raw, mode, mcInstance) ?: return null
+        return applyCrossGuildMeta(parsed, meta)
+    }
+
+    private fun fromPollTextInner(text: String, mode: String, mcInstance: String? = null): IncomingMessage? {
         val raw = text.trim()
         if (raw.isBlank()) return null
 
@@ -252,7 +276,9 @@ object IncomingBridgeFormatter {
                     msg.quotedText ?: "—",
                     bodyText,
                     msg.quotedFromUser,
-                    quoteSource
+                    quoteSource,
+                    msg.originalGuildName,
+                    msg.isCrossGuildQuote,
                 ) { reply ->
                     ChatQoL.toDisplayComponent(reply)
                         .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(msgRgb)))
@@ -311,6 +337,7 @@ object IncomingBridgeFormatter {
             .append(bodyComponent)
 
         appendExtras(out, msg, stack, msg.source)
+        registerQuoteContext(msg)
         return out
     }
 
@@ -360,6 +387,7 @@ object IncomingBridgeFormatter {
             .append(bodyComponent)
 
         appendExtras(out, msg, stack, msg.source)
+        registerQuoteContext(msg)
         return out
     }
 
@@ -399,6 +427,7 @@ object IncomingBridgeFormatter {
             .append(bodyComponent)
 
         appendExtras(out, msg, stack, msg.source)
+        registerQuoteContext(msg)
         return out
     }
 
@@ -434,7 +463,26 @@ object IncomingBridgeFormatter {
             "mc", "minecraft" -> "minecraft"
             else -> "discord"
         }
-        out.append(QuoteClickHelper.quoteActionButton(msg.username, sourceId, msg.body))
+        out.append(QuoteClickHelper.quoteActionButton(
+            msg.username,
+            sourceId,
+            msg.body,
+            msg.remoteGuildId ?: msg.originalGuildId,
+            msg.remoteGuildName ?: msg.originalGuildName ?: msg.remoteGuildTag,
+        ))
+    }
+
+    private fun registerQuoteContext(msg: IncomingMessage) {
+        val guildId = msg.remoteGuildId ?: msg.originalGuildId
+        val guildName = msg.remoteGuildName ?: msg.originalGuildName ?: msg.remoteGuildTag
+        QuoteContextRegistry.register(
+            msg.username,
+            msg.source,
+            msg.body,
+            guildId,
+            guildName,
+            msg.remoteGuildTag,
+        )
     }
 
     private fun configColorHex(hex: String): Int = try {
@@ -472,7 +520,9 @@ object IncomingBridgeFormatter {
                 quoted,
                 bodyText,
                 msg.quotedFromUser,
-                quoteSource
+                quoteSource,
+                msg.originalGuildName,
+                msg.isCrossGuildQuote,
             ) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }
@@ -484,7 +534,9 @@ object IncomingBridgeFormatter {
                 quote.quotedText,
                 quote.replyText,
                 quote.quotedFromUser,
-                quote.quotedFromInstance
+                quote.quotedFromInstance,
+                msg.originalGuildName,
+                msg.isCrossGuildQuote,
             ) { reply ->
                 ChatQoL.toDisplayComponent(reply).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(rgb)))
             }
@@ -584,6 +636,31 @@ object IncomingBridgeFormatter {
             if (value.isNotEmpty()) return value
         }
         return null
+    }
+
+    private fun parseBoolField(root: JsonObject, name: String): Boolean {
+        val el = root.get(name) ?: return false
+        if (el.isJsonNull) return false
+        return when {
+            el.isJsonPrimitive && el.asJsonPrimitive.isBoolean -> el.asBoolean
+            el.isJsonPrimitive && el.asJsonPrimitive.isString -> el.asString.equals("true", ignoreCase = true)
+            else -> false
+        }
+    }
+
+    private fun applyCrossGuildMeta(msg: IncomingMessage, meta: JsonObject?): IncomingMessage {
+        if (meta == null) return msg
+        val originalGuildId = firstString(meta, "originalGuildId") ?: msg.originalGuildId
+        val originalGuildName = firstString(meta, "originalGuildName") ?: msg.originalGuildName
+        val isCrossGuildQuote = parseBoolField(meta, "isCrossGuildQuote") || msg.isCrossGuildQuote
+        if (!isCrossGuildQuote && originalGuildId.isNullOrBlank() && originalGuildName.isNullOrBlank()) {
+            return msg
+        }
+        return msg.copy(
+            originalGuildId = originalGuildId,
+            originalGuildName = originalGuildName,
+            isCrossGuildQuote = isCrossGuildQuote,
+        )
     }
 
     private fun parseQuoteBlock(raw: String): IncomingMessage? {

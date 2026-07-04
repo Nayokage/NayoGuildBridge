@@ -106,11 +106,37 @@ class ImagePreview(private val urls: List<String>) {
 
     fun scaledSize(maxWidth: Int, maxHeight: Int): Pair<Int, Int> {
         if (width <= 0 || height <= 0) return 1 to 1
-        var scale = minOf(maxWidth.toFloat() / width, maxHeight.toFloat() / height, 1f)
+        val safeMaxW = maxWidth.coerceAtLeast(1)
+        val safeMaxH = maxHeight.coerceAtLeast(1)
+        var scale = minOf(safeMaxW.toFloat() / width, safeMaxH.toFloat() / height, 1f)
         if (scale <= 0f) scale = 1f
-        val scaledW = (width * scale).toInt().coerceAtLeast(1)
-        val scaledH = (height * scale).toInt().coerceAtLeast(1)
+        val scaledW = (width * scale).toInt().coerceIn(1, safeMaxW)
+        val scaledH = (height * scale).toInt().coerceIn(1, safeMaxH)
         return scaledW to scaledH
+    }
+
+    companion object {
+        fun computeChatPreviewBounds(client: Minecraft, fullScreen: Boolean): Pair<Int, Int> {
+            val screenW = client.window.guiScaledWidth.coerceAtLeast(1)
+            val screenH = client.window.guiScaledHeight.coerceAtLeast(1)
+            val pad = ImagePreviewHandler.PADDING
+            if (fullScreen) {
+                return (screenW - pad * 2 - 2).coerceAtLeast(1) to (screenH - pad * 2 - 2).coerceAtLeast(1)
+            }
+            val maxW = (screenW - pad * 2 - 8).coerceIn(64, screenW - pad * 2)
+            val maxH = minOf(
+                (screenH * 0.55).toInt(),
+                (maxW * 1.25).toInt(),
+                screenH - pad * 2 - 24,
+            ).coerceIn(48, screenH - pad * 2)
+            return maxW to maxH
+        }
+
+        fun computeScreenPreviewBounds(screenWidth: Int, screenHeight: Int): Pair<Int, Int> {
+            val maxW = (screenWidth - 16).coerceAtLeast(64)
+            val maxH = (screenHeight - 28 - 48 - 8).coerceAtLeast(64)
+            return maxW to maxH
+        }
     }
 
     private fun drawMessageAt(context: GuiGraphicsExtractor, client: Minecraft, text: String, x: Int, y: Int) {

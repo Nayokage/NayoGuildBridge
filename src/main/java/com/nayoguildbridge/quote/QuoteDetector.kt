@@ -7,7 +7,10 @@ object QuoteDetector {
         val quotedMessage: String? = null,
         val quotedFromInstance: String? = null,
         val quotedFromUser: String? = null,
-        val replyToMessageId: String? = null
+        val replyToMessageId: String? = null,
+        val originalGuildId: String? = null,
+        val originalGuildName: String? = null,
+        val isCrossGuildQuote: Boolean = false,
     )
 
     data class IncomingQuote(

@@ -123,7 +123,15 @@ object PlatformBridgePoll {
 
                         val mode = obj.get("mode")?.asString ?: "chat"
                         val fromInstance = obj.get("fromInstanceId")?.asString?.trim()?.ifBlank { null }
-                        val incoming = IncomingBridgeFormatter.fromPollText(text, mode, fromInstance) ?: continue
+                        val metaJson = obj.get("metaJson")?.asString?.trim()?.ifBlank { null }
+                        val metaRoot = metaJson?.let {
+                            try {
+                                com.google.gson.JsonParser.parseString(it).asJsonObject
+                            } catch (_: Throwable) {
+                                null
+                            }
+                        }
+                        val incoming = IncomingBridgeFormatter.fromPollText(text, mode, fromInstance, metaRoot) ?: continue
                         if (!cfg.bridgePollDisplayInChat) continue
                         if (!BridgeChatDedupe.claimDisplay(incoming.username, incoming.body)) continue
 

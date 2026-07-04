@@ -5,6 +5,7 @@ import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.ims.ImsBridgeClient
 import com.nayoguildbridge.quote.ApiClient
 import com.nayoguildbridge.quote.ConfigManager
+import com.nayoguildbridge.quote.QuoteContextRegistry
 import com.nayoguildbridge.quote.QuoteDetector
 import com.nayoguildbridge.util.BridgeOutboundFilter
 import net.minecraft.client.Minecraft
@@ -22,11 +23,12 @@ object BridgeRouter {
 
     fun sendQuote(quote: QuoteDetector.Result) {
         if (!ConfigManager.quoteSystemEnabled()) return
+        val enriched = QuoteContextRegistry.enrich(quote, ImsBridgeClient.localGuildId().ifBlank { null })
         if (ImsBridgeClient.isConnected()) {
-            ImsBridgeClient.sendQuote(quote)
+            ImsBridgeClient.sendQuote(enriched)
             return
         }
-        ApiClient.sendQuotedMessage(quote, ConfigManager.apiUrls())
+        ApiClient.sendQuotedMessage(enriched, ConfigManager.apiUrls())
     }
 
     fun canSendCombined(): Boolean {

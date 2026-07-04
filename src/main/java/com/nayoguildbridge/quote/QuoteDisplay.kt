@@ -20,6 +20,8 @@ object QuoteDisplay {
         replyText: String,
         quotedFromUser: String? = null,
         sourceId: String? = null,
+        originalGuildName: String? = null,
+        isCrossGuildQuote: Boolean = false,
         replyBuilder: (String) -> Component
     ): Component {
         val preview = truncate(quotedText)
@@ -27,6 +29,20 @@ object QuoteDisplay {
         val normalizedSource = BridgeSourceTags.normalizeSourceId(sourceId ?: "discord")
 
         val out: MutableComponent = Component.empty()
+        if (isCrossGuildQuote) {
+            val guildLabel = originalGuildName?.trim()?.takeIf { it.isNotEmpty() }
+            if (!guildLabel.isNullOrEmpty()) {
+                out.append(
+                    Component.literal("[$guildLabel]")
+                        .withStyle(
+                            Style.EMPTY
+                                .withColor(TextColor.fromRgb(0x8A8D93))
+                                .withItalic(true)
+                        )
+                )
+                out.append(Component.literal("\n"))
+            }
+        }
         out.append(
             Component.literal("| ")
                 .withStyle(

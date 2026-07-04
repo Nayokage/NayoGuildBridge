@@ -1,6 +1,7 @@
 package com.nayoguildbridge.quote
 
 import com.nayoguildbridge.NayoGuildBridge
+import com.nayoguildbridge.ims.ImsBridgeClient
 import com.nayoguildbridge.util.BridgeTextUtil
 import com.nayoguildbridge.util.PlayerIdentity
 import com.google.gson.Gson
@@ -31,15 +32,16 @@ object ApiClient {
 
         val client = Minecraft.getInstance()
         val player = client.player ?: return
+        val enriched = QuoteContextRegistry.enrich(quote, ImsBridgeClient.localGuildId().ifBlank { null })
 
         val messageId = UUID.randomUUID().toString()
         val quotedMessageEffective =
-            quote.quotedMessage?.let { BridgeTextUtil.stripBridgeFormatting(it) }?.takeIf { it.isNotEmpty() } ?: "—"
+            enriched.quotedMessage?.let { BridgeTextUtil.stripBridgeFormatting(it) }?.takeIf { it.isNotEmpty() } ?: "—"
         var quotedFromUserEffective =
-            quote.quotedFromUser?.trim()?.takeIf { it.isNotEmpty() }
+            enriched.quotedFromUser?.trim()?.takeIf { it.isNotEmpty() }
         val quotedFromInstanceEffective =
-            BridgeTextUtil.normalizeSourceTag(quote.quotedFromInstance)
-        val replyBody = BridgeTextUtil.stripBridgeFormatting(quote.body).trim()
+            BridgeTextUtil.normalizeSourceTag(enriched.quotedFromInstance)
+        val replyBody = BridgeTextUtil.stripBridgeFormatting(enriched.body).trim()
         if (replyBody.isEmpty()) return
         if (quotedFromUserEffective == null && quotedFromInstanceEffective == null) {
             quotedFromUserEffective = player.name.string
@@ -69,9 +71,14 @@ object ApiClient {
                 addProperty("quotedFromUser", quotedFromUserEffective)
                 addProperty("replyToUser", quotedFromUserEffective)
             }
-            if (!quote.replyToMessageId.isNullOrBlank()) {
-                addProperty("reply_to_message_id", quote.replyToMessageId)
-                addProperty("replyToMessageId", quote.replyToMessageId)
+            if (!enriched.replyToMessageId.isNullOrBlank()) {
+                addProperty("reply_to_message_id", enriched.replyToMessageId)
+                addProperty("replyToMessageId", enriched.replyToMessageId)
+            }
+            if (enriched.isCrossGuildQuote) {
+                addProperty("isCrossGuildQuote", true)
+                enriched.originalGuildId?.let { addProperty("originalGuildId", it) }
+                enriched.originalGuildName?.let { addProperty("originalGuildName", it) }
             }
         }
 

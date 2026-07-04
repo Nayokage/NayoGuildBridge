@@ -31,7 +31,7 @@ object ImsChatDisplay {
         val msgText = root.get("msg")?.asString?.trim().orEmpty()
         val incoming = when {
             msgText.startsWith(">") || msgText.startsWith("[QUOTE]", ignoreCase = true) || msgText.contains('\n') ->
-                IncomingBridgeFormatter.fromPollText(msgText, "chat")
+                IncomingBridgeFormatter.fromPollText(msgText, "chat", null, root)
             else -> IncomingBridgeFormatter.fromWsJson(root, defaultTag)
         } ?: return
         if (!BridgeChatDedupe.claimDisplay(incoming.username, incoming.body)) return

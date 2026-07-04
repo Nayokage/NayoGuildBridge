@@ -7,6 +7,7 @@ import com.nayoguildbridge.config.BridgeEndpoints
 import com.nayoguildbridge.config.NgbConfig
 import com.nayoguildbridge.util.BridgeTextUtil
 import com.nayoguildbridge.util.PlayerIdentity
+import com.nayoguildbridge.quote.QuoteContextRegistry
 import com.nayoguildbridge.quote.QuoteDetector
 import com.nayoguildbridge.util.ItemStackJson
 import net.minecraft.client.Minecraft
@@ -30,6 +31,7 @@ object ImsBridgeClient {
     @Volatile private var guildTag: String = ""
     @Volatile private var guildColor: String = "§a"
     @Volatile private var guildName: String = ""
+    @Volatile private var guildId: String = ""
     @Volatile private var lastError: String = ""
     @Volatile private var authBlockedUntil = 0L
     @Volatile private var wsEndpointIndex = 0
@@ -61,6 +63,8 @@ object ImsBridgeClient {
     fun isConnected(): Boolean = connected
 
     fun guildDisplayName(): String = guildName.ifBlank { guildTag.ifBlank { NgbConfig.config.imsGuildTag } }
+
+    fun localGuildId(): String = guildId
 
     fun statusLine(): String {
         val cfg = NgbConfig.config
@@ -163,10 +167,11 @@ object ImsBridgeClient {
     fun sendQuote(quote: QuoteDetector.Result) {
         if (!canSend()) return
         val player = Minecraft.getInstance().player ?: return
+        val enriched = QuoteContextRegistry.enrich(quote, guildId.ifBlank { null })
         val messageId = UUID.randomUUID().toString()
-        val quotedMessageEffective = quote.quotedMessage?.let { BridgeTextUtil.stripBridgeFormatting(it) }?.takeIf { it.isNotEmpty() } ?: "—"
-        var quotedFromUser = quote.quotedFromUser?.trim()?.takeIf { it.isNotEmpty() } ?: player.name.string
-        val replyBody = BridgeTextUtil.stripBridgeFormatting(quote.body).trim()
+        val quotedMessageEffective = enriched.quotedMessage?.let { BridgeTextUtil.stripBridgeFormatting(it) }?.takeIf { it.isNotEmpty() } ?: "—"
+        var quotedFromUser = enriched.quotedFromUser?.trim()?.takeIf { it.isNotEmpty() } ?: player.name.string
+        val replyBody = BridgeTextUtil.stripBridgeFormatting(enriched.body).trim()
         if (replyBody.isEmpty()) return
 
         val payload = JsonObject().apply {
@@ -185,14 +190,19 @@ object ImsBridgeClient {
             addProperty("quotedText", quotedMessageEffective)
             addProperty("quotedFromUser", quotedFromUser)
             addProperty("replyToUser", quotedFromUser)
-            BridgeTextUtil.normalizeSourceTag(quote.quotedFromInstance)?.let {
+            BridgeTextUtil.normalizeSourceTag(enriched.quotedFromInstance)?.let {
                 addProperty("quotedFromInstance", it)
                 addProperty("quotedSource", it)
             }
             addProperty("timestamp", System.currentTimeMillis())
-            if (!quote.replyToMessageId.isNullOrBlank()) {
-                addProperty("reply_to_message_id", quote.replyToMessageId)
-                addProperty("replyToMessageId", quote.replyToMessageId)
+            if (!enriched.replyToMessageId.isNullOrBlank()) {
+                addProperty("reply_to_message_id", enriched.replyToMessageId)
+                addProperty("replyToMessageId", enriched.replyToMessageId)
+            }
+            if (enriched.isCrossGuildQuote) {
+                addProperty("isCrossGuildQuote", true)
+                enriched.originalGuildId?.let { addProperty("originalGuildId", it) }
+                enriched.originalGuildName?.let { addProperty("originalGuildName", it) }
             }
         }
         ws?.send(payload.toString())
@@ -278,6 +288,7 @@ object ImsBridgeClient {
                         guildTag = root.get("guildTag")?.asString ?: NgbConfig.config.imsGuildTag
                         guildColor = root.get("guildColor")?.asString ?: NgbConfig.config.imsGuildColor
                         guildName = root.get("guild")?.asString ?: ""
+                        guildId = root.get("guildId")?.asString ?: ""
                         val g = guildDisplayName()
                         val notice = "§a[NayoGuildBridge] §fМост подключён. §7Гильдия: §e$g"
                         if (!connectedNoticeShown) {

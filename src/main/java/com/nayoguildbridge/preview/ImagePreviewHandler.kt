@@ -74,17 +74,13 @@ object ImagePreviewHandler {
         val preview = previews.computeIfAbsent(previewKey) { ImagePreview(loadUrls) }
         preview.load(client)
 
-        val maxW = if (client.hasControlDown()) {
-            client.window.guiScaledWidth - PADDING * 2 - 2
-        } else {
-            280
-        }
-        val maxH = if (client.hasControlDown()) {
-            client.window.guiScaledHeight - PADDING * 2 - 2
-        } else {
-            200
-        }
-        preview.render(context, client, maxW.coerceAtLeast(1), maxH.coerceAtLeast(1))
+        val fullScreen = client.hasControlDown()
+        val (maxW, maxH) = ImagePreview.computeChatPreviewBounds(client, fullScreen)
+        val (scaledW, scaledH) = preview.scaledSize(maxW, maxH)
+        val screenW = client.window.guiScaledWidth
+        val x = (screenW - scaledW - PADDING).coerceAtLeast(PADDING)
+        val y = PADDING + 1
+        preview.renderAt(context, client, x, y, maxW, maxH)
     }
 
     private fun getHoveredStyle(client: Minecraft, mouseX: Int, mouseY: Int): Style? {
@@ -197,10 +193,9 @@ class ImagePreviewScreen(
 
         val client = Minecraft.getInstance()
         preview.load(client)
-        val maxW = (width * 0.86).toInt().coerceAtLeast(64)
-        val maxH = (height * 0.68).toInt().coerceAtLeast(64)
+        val (maxW, maxH) = ImagePreview.computeScreenPreviewBounds(width, height)
         val (scaledW, scaledH) = preview.scaledSize(maxW, maxH)
-        val x = (width - scaledW) / 2
+        val x = ((width - scaledW) / 2).coerceAtLeast(8)
         val y = 28 + ((height - 28 - 48 - scaledH) / 2).coerceAtLeast(8)
         preview.renderAt(guiGraphics, client, x, y, maxW, maxH)
 

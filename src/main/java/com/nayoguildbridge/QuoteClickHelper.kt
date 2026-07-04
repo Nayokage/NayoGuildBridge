@@ -1,5 +1,6 @@
 package com.nayoguildbridge
 
+import com.nayoguildbridge.quote.QuoteContextRegistry
 import net.minecraft.network.chat.ClickEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.HoverEvent
@@ -7,10 +8,23 @@ import net.minecraft.network.chat.Style
 import net.minecraft.network.chat.TextColor
 
 object QuoteClickHelper {
-    fun quoteActionButton(senderNick: String, sourceId: String = "discord", quotedText: String? = null): Component {
+    fun quoteActionButton(
+        senderNick: String,
+        sourceId: String = "discord",
+        quotedText: String? = null,
+        originalGuildId: String? = null,
+        originalGuildName: String? = null,
+    ): Component {
         if (!com.nayoguildbridge.config.NgbConfig.config.quoteSystemEnabled) return Component.empty()
         val cleanNick = senderNick.replace(":", "").trim()
         if (cleanNick.isBlank()) return Component.empty()
+        QuoteContextRegistry.register(
+            cleanNick,
+            sourceId,
+            quotedText,
+            originalGuildId,
+            originalGuildName,
+        )
         return Component.literal(" [q]")
             .withStyle(quoteButtonStyle(quotePrefill(cleanNick, sourceId, quotedText)))
     }
