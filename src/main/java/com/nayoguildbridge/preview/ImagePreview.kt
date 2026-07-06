@@ -29,7 +29,11 @@ class ImagePreview(private val urls: List<String>) {
     fun isReady(): Boolean = width > 0 && height > 0
 
     fun load(client: Minecraft) {
-        if (loading || failed || width > 0) return
+        if (loading || width > 0) return
+        if (failed) {
+            failed = false
+            failureReason = "Не удалось загрузить изображение"
+        }
         loading = true
         CompletableFuture.supplyAsync { download(url) }.whenComplete { bytes, err ->
             if (err != null || bytes == null) {
@@ -40,11 +44,12 @@ class ImagePreview(private val urls: List<String>) {
             }
             client.execute {
                 try {
-                    val native = NativeImage.read(bytes)
+                    val native = ImageDecoder.decode(bytes)
                     width = native.width
                     height = native.height
                     val texture = DynamicTexture({ "ngb-preview-$url" }, native)
                     client.textureManager.register(textureId, texture)
+                    failed = false
                 } catch (t: Throwable) {
                     failureReason = t.message ?: "Ошибка декодирования"
                     failed = true
