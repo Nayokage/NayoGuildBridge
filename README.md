@@ -12,7 +12,6 @@ A client-side Fabric mod for cleaner bridged chat in Guild.
 - Blocklist filtering for unwanted content.
 - Quote system: send to `POST /api/messages` (Discord/TG via webhook or br1dgebtw bot).
 - Optional backend sync (`/api/ingest` + `/api/poll`) — see `bridge-site/QUOTES_FLOW.md`.
-- Server deploy (PM2, same VDS as API): `bridge-site/DEPLOY_PM2.md`.
 
 ## Supported Versions
 
